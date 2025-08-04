@@ -1,0 +1,157 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4303543968376926888
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9050367233980811839}
+  - component: {fileID: 193215643986501112}
+  - component: {fileID: 3439607610455364306}
+  - component: {fileID: 5958068561812943934}
+  - component: {fileID: 126696177285407314}
+  - component: {fileID: -1108119189983833008}
+  m_Layer: 0
+  m_Name: Game Controller
+  m_TagString: GameController
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9050367233980811839
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &193215643986501112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e68874853f1bb844589465468ed5969b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  seed: 0
+--- !u!114 &3439607610455364306
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2be49398ba46cdf49a5075fa9e295fb3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  blockGrid: []
+--- !u!114 &5958068561812943934
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc9d028e5fa7020438f6c1292bd7e907, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &126696177285407314
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0d64bf85537f854491c1c1c70a7ba59, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  stonePrefab: {fileID: 0}
+  woodPrefab: {fileID: 0}
+  treePrefab: {fileID: 0}
+  waterPrefab: {fileID: 0}
+  lavaPrefab: {fileID: 0}
+  dirtPrefab: {fileID: 942471727005289075, guid: 6dd1f0ae4b7c47b4ba08c086e2905ac7,
+    type: 3}
+  grassPrefab: {fileID: 6701471699109078813, guid: f771e81925c8b814282f3ae2f5b77ff4,
+    type: 3}
+  sandPrefab: {fileID: 0}
+  orangePortalPrefab: {fileID: 0}
+  bluePortalPrefab: {fileID: 0}
+  platformPrefab: {fileID: 0}
+  vanguardTowerPrefab: {fileID: 0}
+  sentinelTowerPrefab: {fileID: 0}
+  boomerangTowerPrefab: {fileID: 0}
+  mortarTowerPrefab: {fileID: 0}
+  mirrorTowerPrefab: {fileID: 0}
+  playerPrefab: {fileID: 4541272084693723639, guid: f1a4985bd20c5184791134274ad69652,
+    type: 3}
+--- !u!114 &-1108119189983833008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dc9d49599d3f984a98c17d825d80562, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerInput: {fileID: 0}
+  xMovement:
+    m_Name: X Movement
+    m_Type: 0
+    m_ExpectedControlType: 
+    m_Id: e0881e27-faf4-4a32-81e1-2731c657dc72
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings: []
+    m_Flags: 0
+  yMovement:
+    m_Name: Y Movement
+    m_Type: 0
+    m_ExpectedControlType: 
+    m_Id: 0c34f243-bb6c-4a7f-a00c-e3c1f1c098fc
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings: []
+    m_Flags: 0
+  zMovement:
+    m_Name: Z Movement
+    m_Type: 0
+    m_ExpectedControlType: 
+    m_Id: d46a8116-a5e2-4793-bdcb-47051d84ef76
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings: []
+    m_Flags: 0
+  speedControl:
+    m_Name: Speed Control
+    m_Type: 0
+    m_ExpectedControlType: 
+    m_Id: 01b41128-1102-4f36-9fcd-fecb403d61c3
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings: []
+    m_Flags: 0
