@@ -28,18 +28,16 @@ public class GameControllerScript : MonoBehaviour
         }
         Random.InitState(seed);
     }
-    
-    private void Update()
+
+    private void Start()
     {
-        if (!_gameStarted)
-        {
-            _gameStarted = true;
+        BlockScript centreBlock = GridControllerScript.instance.GetGridBlock(0, 0);
+        Vector3 spawnPosition = new Vector3(0, centreBlock.transform.position.y + 2, 0);
 
-            BlockScript centreBlock = GridControllerScript.instance.GetGridBlock(0, 0);
-            Vector3 spawnPosition = new Vector3(0, centreBlock.transform.position.y + 2, 0);
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        player.transform.position = spawnPosition;
+        player.GetComponent<PlayerScript>().currentBlock = centreBlock;
 
-            GameObject player = Instantiate(PrefabsScript.instance.playerPrefab, spawnPosition, Quaternion.identity);
-            player.GetComponent<PlayerScript>().currentBlock = centreBlock;
-        }
+        Cursor.lockState = CursorLockMode.Locked;
     }
 }

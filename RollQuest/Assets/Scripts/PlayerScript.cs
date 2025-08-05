@@ -6,13 +6,25 @@ using UnityEngine.InputSystem;
 
 public class PlayerScript : MonoBehaviour
 {
+    public static PlayerScript instance;
+    
     public BlockScript currentBlock;
     
     private Coroutine _moveCoroutine;
+
+    private GameObject _playerModel;
     
     private void Awake()
     {
-        InputManager.instance.BindPlayerInput(this);
+        if (instance != null && instance != this)
+        {
+            Destroy(this);
+            return;
+        }
+
+        instance = this;
+        
+        _playerModel = transform.GetChild(0).gameObject;
     }
 
     public void MoveFB(InputAction.CallbackContext context)
@@ -69,7 +81,7 @@ public class PlayerScript : MonoBehaviour
         Vector3 pivot = transform.position + (direction.normalized * 1f) + (Vector3.down * 1f);
 
         Quaternion totalRotation = Quaternion.AngleAxis(90f, rotationAxis);
-        Quaternion startRotation = transform.rotation;
+        Quaternion startRotation = _playerModel.transform.rotation;
         
         Vector3 startPosition = transform.position;
         
@@ -100,13 +112,13 @@ public class PlayerScript : MonoBehaviour
             }
             
             transform.position = rotatedPosition;
-            transform.rotation = incrementalRotation * startRotation;
+            _playerModel.transform.rotation = incrementalRotation * startRotation;
             
             yield return null;
         }
 
         transform.position = finalPosition;
-        transform.rotation = totalRotation * startRotation;
+        _playerModel.transform.rotation = totalRotation * startRotation;
         
         currentBlock = targetBlock;
         

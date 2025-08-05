@@ -31,6 +31,11 @@ public class InputManager : MonoBehaviour
 
     private void Start()
     {
+        
+        BindAction("MoveFB", PlayerScript.instance.MoveFB);
+        BindAction("MoveLR", PlayerScript.instance.MoveLR);
+        BindAction("Look", CameraScript.instance.RotateCamera);
+        
         // if (GameHelperScript.instance != null)
         // {
         //     BindAction("Access Debug Keys", GameHelperScript.instance.AccessDebugKeys);
@@ -107,10 +112,11 @@ public class InputManager : MonoBehaviour
     
     private void OnDestroy()
     {
-        if (playerInput != null)
+        if (playerInput == null)
         {
-            
+            return;
         }
+        
         foreach (var kvp in boundActions)
         {
             var action = playerInput.actions[kvp.Key];
@@ -139,14 +145,6 @@ public class InputManager : MonoBehaviour
         //                             TutorialDisplayScript.TutorialTask.PressShift,
         //                             TutorialDisplayScript.TutorialTask.PressCtrl);
         // }
-    }
-
-    public void BindPlayerInput(PlayerScript playerScript)
-    {
-        playerInput = playerScript.GetComponent<PlayerInput>();
-        
-        BindAction("MoveFB", playerScript.MoveFB);
-        BindAction("MoveLR", playerScript.MoveLR);
     }
 
     // private void CheckInputAndFinishTask(InputAction action,
