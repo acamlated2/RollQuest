@@ -14,6 +14,10 @@ public class PlayerScript : MonoBehaviour
 
     private GameObject _playerModel;
     
+    private GameObject _directionIndicator;
+
+    private Vector3 _virtualFront = new Vector3(0, 0, 1);
+    
     private void Awake()
     {
         if (instance != null && instance != this)
@@ -25,30 +29,38 @@ public class PlayerScript : MonoBehaviour
         instance = this;
         
         _playerModel = transform.GetChild(0).gameObject;
+        _directionIndicator = transform.GetChild(2).gameObject;
+    }
+    
+    public void ChangeVirtualFront(Vector3 direction)
+    {
+        _virtualFront = direction;
+        
+        _directionIndicator.transform.position = transform.position + _virtualFront * 2f;
     }
 
     public void MoveFB(InputAction.CallbackContext context)
     {
-        if (context.ReadValue<float>() < 0)
-        {
-            TryMove(new Vector3(0, 0, -1));
-        }
-        if (context.ReadValue<float>() > 0)
-        {
-            TryMove(new Vector3(0, 0, 1));
-        }
+        float value = context.ReadValue<float>();
+        
+        if (Mathf.Approximately(value, 0)) return;
+        
+        Vector3 direction = _virtualFront.normalized;
+        direction.y = 0;
+        direction.Normalize();
+        
+        TryMove(direction * Mathf.Sign(value));
     }
     
     public void MoveLR(InputAction.CallbackContext context)
     {
-        if (context.ReadValue<float>() < 0)
-        {
-            TryMove(new Vector3(-1, 0, 0));
-        }
-        if (context.ReadValue<float>() > 0)
-        {
-            TryMove(new Vector3(1, 0, 0));
-        }
+        float value = context.ReadValue<float>();
+        
+        if (Mathf.Approximately(value, 0)) return;
+
+        Vector3 direction = Vector3.Cross(Vector3.up, _virtualFront).normalized;
+        
+        TryMove(direction * Mathf.Sign(value));
     }
     
     private void TryMove(Vector3 direction)

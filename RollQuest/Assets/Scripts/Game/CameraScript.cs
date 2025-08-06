@@ -31,5 +31,23 @@ public class CameraScript : MonoBehaviour
         Vector2 lookDirection = context.ReadValue<Vector2>();
 
         _rotatePoint.transform.Rotate(new Vector3(0, lookDirection.x * 10 * Time.deltaTime, 0));
+        
+        PlayerScript.instance.ChangeVirtualFront(GetCameraFacingDirection());
+    }
+    
+    private Vector3 GetCameraFacingDirection()
+    {
+        Vector3 dir = transform.forward;
+        dir.y = 0f;
+        dir.Normalize();
+
+        if (Mathf.Abs(dir.x) > Mathf.Abs(dir.z))
+        {
+            return dir.x > 0 ? Vector3.right : Vector3.left;
+        }
+        else
+        {
+            return dir.z > 0 ? Vector3.forward : Vector3.back;
+        }
     }
 }
