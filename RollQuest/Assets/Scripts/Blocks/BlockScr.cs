@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
 
-public class BlockScript : MonoBehaviour
+public class BlockScr : MonoBehaviour
 {
     public enum BlockType
     {
@@ -37,12 +37,12 @@ public class BlockScript : MonoBehaviour
 
     protected virtual void Start()
     {
-        EventManagerScript.Instance.OnBlocksInitialise += InitialiseBlock;
+        EventManagerScr.Instance.OnBlocksInitialise += InitialiseBlock;
     }
     
     protected virtual void OnDestroy()
     {
-        EventManagerScript.Instance.OnBlocksInitialise -= InitialiseBlock;
+        EventManagerScr.Instance.OnBlocksInitialise -= InitialiseBlock;
     }
 
     public void InitialiseBlock()
@@ -74,8 +74,8 @@ public class BlockScript : MonoBehaviour
         GameObject newBlockObject = Instantiate(prefab, spawnPosition, Quaternion.identity);
         newBlockObject.name = prefab.name + " " + gridPos.x + " " + gridPos.z;
 
-        newBlockObject.GetComponent<BlockScript>().owner = gameObject;
-        newBlockObject.GetComponent<BlockScript>().rootOwner = gameObject;
+        newBlockObject.GetComponent<BlockScr>().owner = gameObject;
+        newBlockObject.GetComponent<BlockScr>().rootOwner = gameObject;
         ownedBlock = newBlockObject;
 
         return newBlockObject;

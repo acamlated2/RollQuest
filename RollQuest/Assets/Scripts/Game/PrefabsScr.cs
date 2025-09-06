@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PrefabsScript : MonoBehaviour
+public class PrefabsScr : MonoBehaviour
 {
     // blocks
     public GameObject stonePrefab;
@@ -26,7 +26,7 @@ public class PrefabsScript : MonoBehaviour
     public GameObject mortarTowerPrefab;
     public GameObject mirrorTowerPrefab;
     
-    public static PrefabsScript instance;
+    public static PrefabsScr instance;
     
     // characters
     public GameObject playerPrefab;

@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class EventManagerScript : MonoBehaviour
+public class EventManagerScr : MonoBehaviour
 {
-    public static EventManagerScript Instance;
+    public static EventManagerScr Instance;
 
     private void Awake()
     {

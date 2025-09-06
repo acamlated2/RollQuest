@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class GameControllerScript : MonoBehaviour
+public class GameplayControllerScr : MonoBehaviour
 {
-    public static GameControllerScript instance;
+    public static GameplayControllerScr instance;
     
     private bool _gameStarted;
     
@@ -31,13 +31,15 @@ public class GameControllerScript : MonoBehaviour
 
     private void Start()
     {
-        BlockScript centreBlock = GridControllerScript.instance.GetGridBlock(0, 0);
-        Vector3 spawnPosition = new Vector3(0, centreBlock.transform.position.y + 2, 0);
+        Cursor.lockState = CursorLockMode.Locked;
+    }
+
+    public void SetPlayerPosition(BlockScr centerBlock)
+    {
+        Vector3 spawnPosition = new Vector3(0, centerBlock.transform.position.y + 2, 0);
 
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         player.transform.position = spawnPosition;
-        player.GetComponent<PlayerScript>().currentBlock = centreBlock;
-
-        Cursor.lockState = CursorLockMode.Locked;
+        player.GetComponent<PlayerScr>().currentBlockScr = centerBlock;
     }
 }

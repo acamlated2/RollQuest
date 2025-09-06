@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
 
-public class GrassScript : BlockScript
+public class GrassScr : BlockScr
 {
     public void CreateObject()
     {
@@ -23,21 +23,21 @@ public class GrassScript : BlockScript
             walkableType = Node.WalkableType.NonWalkable;
 
             GameObject newOwnedBlock = null;
-            GameObject prefab = PrefabsScript.instance.woodPrefab;
+            GameObject prefab = PrefabsScr.instance.woodPrefab;
 
             if (randBlockInt == 0)
             {
-                newOwnedBlock = SpawnBlock(PrefabsScript.instance.woodPrefab);
-                prefab = PrefabsScript.instance.woodPrefab;
+                newOwnedBlock = SpawnBlock(PrefabsScr.instance.woodPrefab);
+                prefab = PrefabsScr.instance.woodPrefab;
             }
 
             if (randBlockInt == 1)
             {
-                newOwnedBlock = SpawnBlock(PrefabsScript.instance.stonePrefab);
-                prefab = PrefabsScript.instance.stonePrefab;
+                newOwnedBlock = SpawnBlock(PrefabsScr.instance.stonePrefab);
+                prefab = PrefabsScr.instance.stonePrefab;
             }
             
-            newOwnedBlock.GetComponent<BlockScript>().InitialiseBlock();
+            newOwnedBlock.GetComponent<BlockScr>().InitialiseBlock();
             newOwnedBlock.transform.parent =
                 GameObject.FindGameObjectWithTag("Environment Blocks Parent").transform;
             newOwnedBlock.name = prefab.name + " " + gridPos.x + " " + gridPos.y;

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class DirtScript : MonoBehaviour
+public class DirtScr : MonoBehaviour
 {
     private void Awake()
     {

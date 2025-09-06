@@ -4,19 +4,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class InputManager : MonoBehaviour
+public class InputManagerScr : MonoBehaviour
 {
-    public static InputManager instance;
+    public static InputManagerScr instance;
     
     [SerializeField] private PlayerInput playerInput;
 
     private Dictionary<string, List<Action<InputAction.CallbackContext>>> boundActions =
         new Dictionary<string, List<Action<InputAction.CallbackContext>>>();
-    
-    public InputAction xMovement;
-    public InputAction yMovement;
-    public InputAction zMovement;
-    public InputAction speedControl;
     
     private void Awake()
     {
@@ -32,9 +27,9 @@ public class InputManager : MonoBehaviour
     private void Start()
     {
         
-        BindAction("MoveFB", PlayerScript.instance.MoveFB);
-        BindAction("MoveLR", PlayerScript.instance.MoveLR);
-        BindAction("Look", CameraScript.instance.RotateCamera);
+        BindAction("MoveFB", PlayerScr.instance.MoveFB);
+        BindAction("MoveLR", PlayerScr.instance.MoveLR);
+        BindAction("Look", CameraScr.instance.RotateCamera);
         
         // if (GameHelperScript.instance != null)
         // {

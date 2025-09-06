@@ -5,9 +5,9 @@ using Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class CameraScript : MonoBehaviour
+public class CameraScr : MonoBehaviour
 {
-    public static CameraScript instance;
+    public static CameraScr instance;
     
     private GameObject _player;
     private GameObject _rotatePoint;
@@ -32,7 +32,7 @@ public class CameraScript : MonoBehaviour
 
         _rotatePoint.transform.Rotate(new Vector3(0, lookDirection.x * 10 * Time.deltaTime, 0));
         
-        PlayerScript.instance.ChangeVirtualFront(GetCameraFacingDirection());
+        PlayerScr.instance.ChangeVirtualFront(GetCameraFacingDirection());
     }
     
     private Vector3 GetCameraFacingDirection()

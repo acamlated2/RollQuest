@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerScript : MonoBehaviour
+public class PlayerScr : MonoBehaviour
 {
-    public static PlayerScript instance;
+    public static PlayerScr instance;
     
-    public BlockScript currentBlock;
+    public BlockScr currentBlockScr;
     
     private Coroutine _moveCoroutine;
 
@@ -68,13 +68,16 @@ public class PlayerScript : MonoBehaviour
         if (_moveCoroutine != null)
             return;
 
-        BlockScript nextBlock = GridControllerScript.instance.GetGridBlock((int)(currentBlock.gridPos.x + direction.x),
-            (int)(currentBlock.gridPos.z + direction.z));
+        BlockScr nextBlockScr = GridControllerScr.instance.GetGridBlock((int)(currentBlockScr.gridPos.x + direction.x),
+            (int)(currentBlockScr.gridPos.z + direction.z));
 
-        _moveCoroutine = StartCoroutine(MoveToPosition(direction, nextBlock));
+        _moveCoroutine = StartCoroutine(MoveToPosition(direction, nextBlockScr, (() =>
+        {
+            GridControllerScr.instance.UpdatePlayerPosition();
+        })));
     }
     
-    private IEnumerator MoveToPosition(Vector3 direction, BlockScript targetBlock)
+    private IEnumerator MoveToPosition(Vector3 direction, BlockScr targetBlockScr, Action onComplete)
     {
         float EaseIn(float t)
         {
@@ -97,7 +100,7 @@ public class PlayerScript : MonoBehaviour
         
         Vector3 startPosition = transform.position;
         
-        float finalYOffset = targetBlock.transform.position.y + 2f;
+        float finalYOffset = targetBlockScr.transform.position.y + 2f;
         
         Vector3 finalRotatedPosition = RotatePointAroundPivot(startPosition, pivot, rotationAxis, 90f);
         Vector3 finalPosition = new Vector3(finalRotatedPosition.x, finalYOffset, finalRotatedPosition.z);
@@ -132,8 +135,10 @@ public class PlayerScript : MonoBehaviour
         transform.position = finalPosition;
         _playerModel.transform.rotation = totalRotation * startRotation;
         
-        currentBlock = targetBlock;
+        currentBlockScr = targetBlockScr;
         
         _moveCoroutine = null;
+        
+        onComplete?.Invoke();
     }
 }
