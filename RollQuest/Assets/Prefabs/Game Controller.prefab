@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 5958068561812943934}
   - component: {fileID: 126696177285407314}
   - component: {fileID: -1108119189983833008}
+  - component: {fileID: 3757991346047294759}
   m_Layer: 0
   m_Name: Game Controller
   m_TagString: GameController
@@ -61,7 +62,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2be49398ba46cdf49a5075fa9e295fb3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  blockGrid: []
+  grassObjectPool: {fileID: 0}
+  dirtObjectPool: {fileID: 0}
 --- !u!114 &5958068561812943934
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -119,39 +121,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerInput: {fileID: 0}
-  xMovement:
-    m_Name: X Movement
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: e0881e27-faf4-4a32-81e1-2731c657dc72
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings: []
-    m_Flags: 0
-  yMovement:
-    m_Name: Y Movement
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: 0c34f243-bb6c-4a7f-a00c-e3c1f1c098fc
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings: []
-    m_Flags: 0
-  zMovement:
-    m_Name: Z Movement
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: d46a8116-a5e2-4793-bdcb-47051d84ef76
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings: []
-    m_Flags: 0
-  speedControl:
-    m_Name: Speed Control
-    m_Type: 0
-    m_ExpectedControlType: 
-    m_Id: 01b41128-1102-4f36-9fcd-fecb403d61c3
-    m_Processors: 
-    m_Interactions: 
-    m_SingletonActionBindings: []
-    m_Flags: 0
+--- !u!114 &3757991346047294759
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 841814c4679d8914995d9e8688c3351b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  atlas: {fileID: 100100200, guid: e21675d664f18c549bf5b4b56d76c8ca, type: 3}
+  blockMaterial: {fileID: 2100000, guid: e286c8944ce85034da3e764a55b98dd1, type: 2}

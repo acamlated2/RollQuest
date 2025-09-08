@@ -14,7 +14,7 @@ public class GridControllerScr : MonoBehaviour
     private Dictionary<Vector2Int, Node> _nodeLookup = new Dictionary<Vector2Int, Node>();
 
     private const float NoiseScale = 0.008f;
-    private const int MaxBlockHeight = 48;
+    private const int MaxBlockHeight = 64;
     private const float Sharpness = 2.5f;
     
     private const float BlockSize = 2;
@@ -210,12 +210,19 @@ public class GridControllerScr : MonoBehaviour
                 float xCoord = (blockPos.x + offset) * NoiseScale;
                 float zCoord = (blockPos.y + offset) * NoiseScale;
 
-                float noiseValue = Mathf.PerlinNoise(xCoord, zCoord) * 0.6f +
-                                   Mathf.PerlinNoise(xCoord * 2, zCoord * 2) * 0.3f +
-                                   Mathf.PerlinNoise(xCoord * 4, zCoord * 4) * 0.1f;
+                // base
+                float baseNoise = Mathf.PerlinNoise(xCoord, zCoord) * 0.6f +
+                                  Mathf.PerlinNoise(xCoord * 2, zCoord * 2) * 0.3f +
+                                  Mathf.PerlinNoise(xCoord * 4, zCoord * 4) * 0.1f;
 
-                float heightCurve = Mathf.Pow(noiseValue, Sharpness);
-                int height = Mathf.RoundToInt(heightCurve * MaxBlockHeight);
+                float heightCurve = Mathf.Pow(baseNoise, Sharpness);
+
+                // Large scale terrain variation
+                float continentNoise = Mathf.PerlinNoise(xCoord * 0.002f, zCoord * 0.002f);
+                float terrainScale = Mathf.Lerp(0.5f, 1.3f, continentNoise);
+
+                int height = Mathf.RoundToInt(heightCurve * MaxBlockHeight * terrainScale);
+                
                 float worldY = height * BlockSize;
 
                 chunkBlockPositions.Add(new Vector3Int((int)blockPos.x, (int)worldY, (int)blockPos.y));
@@ -230,21 +237,22 @@ public class GridControllerScr : MonoBehaviour
     {
         if (!_savedChunks.ContainsValue(chunk))
             yield break;
-        
-        List<Vector3Int> positions = chunk.BlockPositions;
 
-        int count = 0;
-
-        foreach (Vector3Int pos in positions)
+        if (chunk.ChunkObject == null)
         {
-            SpawnBlock(pos);
-            count++;
-
-            if (count >= BlockBatchCount)
-            {
-                count = 0;
-                yield return null; // wait for next frame
-            }
+            chunk.ChunkObject = new GameObject($"Chunk {chunk.Position}");
+            chunk.ChunkObject.transform.position = Vector3.zero;
+            
+            MeshFilter mf = chunk.ChunkObject.AddComponent<MeshFilter>();
+            MeshRenderer mr = chunk.ChunkObject.AddComponent<MeshRenderer>();
+            
+            // assign a material
+            mr.material = AtlasHelperScr.instance.blockMaterial;
+            
+            // build mesh
+            Mesh mesh = GenerateChunkMesh(chunk);
+            mf.mesh = mesh;
+            chunk.Mesh = mesh;
         }
         
         chunk.LastUsedTime = Time.time;
@@ -256,11 +264,21 @@ public class GridControllerScr : MonoBehaviour
         if (!_savedChunks.ContainsValue(chunk))
             return;
         
-        List<Vector3Int> positions = chunk.BlockPositions;
-        
-        foreach (Vector3Int pos in positions)
+        if (chunk.ChunkObject == null)
         {
-            SpawnBlock(pos);
+            chunk.ChunkObject = new GameObject($"Chunk {chunk.Position}");
+            chunk.ChunkObject.transform.position = Vector3.zero;
+            
+            MeshFilter mf = chunk.ChunkObject.AddComponent<MeshFilter>();
+            MeshRenderer mr = chunk.ChunkObject.AddComponent<MeshRenderer>();
+            
+            // assign a material
+            mr.material = AtlasHelperScr.instance.blockMaterial;
+            
+            // build mesh
+            Mesh mesh = GenerateChunkMesh(chunk);
+            mf.mesh = mesh;
+            chunk.Mesh = mesh;
         }
         
         chunk.LastUsedTime = Time.time;
@@ -314,36 +332,14 @@ public class GridControllerScr : MonoBehaviour
 
     private IEnumerator UnloadChunkAsync(Chunk chunk)
     {
-        if (!_savedChunks.ContainsValue(chunk))
-            yield break;
-        
-        List<Vector3Int> positions = chunk.BlockPositions;
-        
-        int count = 0;
-        
-        foreach (Vector3Int pos in positions)
+        if (chunk.ChunkObject != null)
         {
-            Vector2Int gridKey = new Vector2Int((int)(pos.x / BlockSize), (int)(pos.z / BlockSize));
-            if (_blockLookup.TryGetValue(gridKey, out BlockScr blockScr))
-            {
-                GameObject block = blockScr.gameObject;
-                
-                _blockLookup.Remove(gridKey);
-                _nodeLookup.Remove(gridKey);
-
-                grassObjectPool.ReturnObject(block);
-            }
-            
-            count++;
-
-            if (count >= BlockBatchCount)
-            {
-                count = 0;
-                yield return null; // wait for next frame
-            }
+            GameObject.Destroy(chunk.ChunkObject);
+            chunk.ChunkObject = null;
         }
-        
+
         chunk.IsLoaded = false;
+        yield break;
     }
 
     private void SpawnBlock(Vector3 blockPos)
@@ -483,6 +479,157 @@ public class GridControllerScr : MonoBehaviour
             x += dx;
             z += dz;
         }
+    }
+
+    private Mesh GenerateChunkMesh(Chunk chunk)
+    {
+        List<Vector3> vertices = new List<Vector3>();
+        List<int> triangles = new List<int>();
+        List<Vector2> uvs = new List<Vector2>();
+
+        int vertIndex = 0;
+        float s = BlockSize;
+
+        HashSet<Vector3Int> blockSet = new HashSet<Vector3Int>(chunk.BlockPositions);
+        
+        BlockTextures tex = new BlockTextures {
+            Top = "Grass Top",
+            Bottom = "Grass Bottom",
+            Side0 = "Grass Side 0",
+            Side1 = "Grass Side 1",
+            Side2 = "Grass Side 2",
+            Side3 = "Grass Side 3"
+        };
+
+        foreach (Vector3Int b in chunk.BlockPositions)
+        {
+            Vector3 pos = new Vector3(b.x, b.y, b.z);
+
+            foreach (var dir in Directions)
+            {
+                Vector3Int neighbour = b + dir.Offset;
+                if (blockSet.Contains(neighbour))
+                    continue; // hidden face
+
+                // add face vertices (already ordered so triangles (0,1,2) & (2,3,0) give outward normal)
+                vertices.Add(pos + dir.Verts[0] * s);
+                vertices.Add(pos + dir.Verts[1] * s);
+                vertices.Add(pos + dir.Verts[2] * s);
+                vertices.Add(pos + dir.Verts[3] * s);
+
+                // triangles (two tris per quad)
+                triangles.Add(vertIndex + 0);
+                triangles.Add(vertIndex + 1);
+                triangles.Add(vertIndex + 2);
+
+                triangles.Add(vertIndex + 2);
+                triangles.Add(vertIndex + 3);
+                triangles.Add(vertIndex + 0);
+
+                // pick uv rect based on face direction
+                string spriteName = tex.Bottom;
+                if (dir.Offset == Vector3Int.up) spriteName = tex.Top;
+                else if (dir.Offset == Vector3Int.down) spriteName = tex.Bottom;
+                else if (dir.Offset == Vector3Int.left) spriteName = tex.Side0;
+                else if (dir.Offset == Vector3Int.back) spriteName = tex.Side1;
+                else if (dir.Offset == Vector3Int.right) spriteName = tex.Side2;
+                else if (dir.Offset == Vector3Int.forward) spriteName = tex.Side3;
+
+                Rect uvRect = AtlasHelperScr.instance.GetUVRect(spriteName);
+                
+                // quad uvs in rect
+                uvs.Add(new Vector2(uvRect.xMin, uvRect.yMin));
+                uvs.Add(new Vector2(uvRect.xMax, uvRect.yMin));
+                uvs.Add(new Vector2(uvRect.xMax, uvRect.yMax));
+                uvs.Add(new Vector2(uvRect.xMin, uvRect.yMax));
+
+                vertIndex += 4;
+            }
+        }
+
+        Mesh mesh = new Mesh();
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mesh.Clear();
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
+        mesh.SetUVs(0, uvs);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+    
+    private struct FaceDir
+    {
+        public Vector3Int Offset;
+        public Vector3[] Verts;
+    }
+
+    private static readonly FaceDir[] Directions = new FaceDir[]
+    {
+        // Top (+Y) -> verts ordered so normal points +Y
+        new FaceDir {
+            Offset = new Vector3Int(0, 1, 0),
+            Verts = new [] {
+                new Vector3(0,1,0), new Vector3(0,1,1),
+                new Vector3(1,1,1), new Vector3(1,1,0)
+            }
+        },
+
+        // Bottom (-Y) -> verts ordered so normal points -Y
+        new FaceDir {
+            Offset = new Vector3Int(0, -1, 0),
+            Verts = new [] {
+                new Vector3(0,0,0), new Vector3(1,0,0),
+                new Vector3(1,0,1), new Vector3(0,0,1)
+            }
+        },
+
+        // Front (+Z)
+        new FaceDir {
+            Offset = new Vector3Int(0, 0, 1),
+            Verts = new [] {
+                new Vector3(0,0,1), new Vector3(1,0,1),
+                new Vector3(1,1,1), new Vector3(0,1,1)
+            }
+        },
+
+        // Back (-Z)
+        new FaceDir {
+            Offset = new Vector3Int(0, 0, -1),
+            Verts = new [] {
+                new Vector3(1,0,0), new Vector3(0,0,0),
+                new Vector3(0,1,0), new Vector3(1,1,0)
+            }
+        },
+
+        // Right (+X)
+        new FaceDir {
+            Offset = new Vector3Int(1, 0, 0),
+            Verts = new [] {
+                new Vector3(1,0,1), new Vector3(1,0,0),
+                new Vector3(1,1,0), new Vector3(1,1,1)
+            }
+        },
+
+        // Left (-X)
+        new FaceDir {
+            Offset = new Vector3Int(-1, 0, 0),
+            Verts = new [] {
+                new Vector3(0,0,0), new Vector3(0,0,1),
+                new Vector3(0,1,1), new Vector3(0,1,0)
+            }
+        }
+    };
+
+    private struct BlockTextures
+    {
+        public string Top;
+        public string Bottom;
+        public string Side0;
+        public string Side1;
+        public string Side2;
+        public string Side3;
     }
 
     // public List<Node> GetNodeCrossDeepNeighbourList(Node node, int depth)
@@ -693,6 +840,9 @@ public class Chunk
     public bool IsGenerated;
     public bool IsLoaded;
     public float LastUsedTime;
+    
+    public GameObject ChunkObject;
+    public Mesh Mesh;
 
     public Chunk(Vector3 chunkPos, bool isGenerated)
     {
