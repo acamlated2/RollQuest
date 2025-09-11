@@ -19,6 +19,7 @@ public class Block
         Tower, 
         Water, 
         Lava, 
+        Dirt
     }
 
     public BlockTypes BlockType;

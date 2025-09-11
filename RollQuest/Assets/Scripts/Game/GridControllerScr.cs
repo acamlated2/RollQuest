@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -39,6 +40,14 @@ public class GridControllerScr : MonoBehaviour
     
     private HashSet<Chunk> _newChunksToLoadSet = new HashSet<Chunk>();
     private HashSet<Chunk> _chunksToLoadSet = new HashSet<Chunk>();
+    
+    private Vector3Int[] _horizontalDirs =
+    {
+        Vector3Int.left, 
+        Vector3Int.right, 
+        Vector3Int.forward, 
+        Vector3Int.back
+    };
 
     private void Awake()
     {
@@ -170,66 +179,128 @@ public class GridControllerScr : MonoBehaviour
 
         int offset = GameplayControllerScr.instance.seed % 1000;
         List<Vector3Int> chunkBlockPositions = new List<Vector3Int>(ChunkBlockSize * ChunkBlockSize);
-        
-        Vector3Int currentBlockPos;
             
+        // generate top surface
         for (int x = 0; x < ChunkBlockSize; x++) 
         {
             for (int z = 0; z < ChunkBlockSize; z++) 
             {
-                Vector2 blockPos = origin + new Vector2(x * BlockSize, z * BlockSize);
+                Vector2 worldXZ = origin + new Vector2(x * BlockSize, z * BlockSize);
 
-                float xCoord = (blockPos.x + offset) * NoiseScale;
-                float zCoord = (blockPos.y + offset) * NoiseScale;
+                // get height and biome data
+                (int height, Block.BlockTypes blockType) = CalculateHeightAndBiome(worldXZ, offset);
                 
-                // biome
-                float biomeNoise = Mathf.PerlinNoise(xCoord * 0.5f, zCoord * 0.5f);
-                biomeNoise = Mathf.Pow(biomeNoise, 0.5f);
-
-                float desertWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.4f) / 0.4f);
-                float plainsWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.5f) / 0.33f);
-                float mountainWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 1.0f) / 0.33f);
+                Vector3Int gridPos = new Vector3Int(x, height, z);
                 
-                float total = desertWeight + plainsWeight + mountainWeight;
-                desertWeight /= total;
-                plainsWeight /= total;
-                mountainWeight /= total;
+                chunkBlockPositions.Add(gridPos);
+                chunk.Blocks[gridPos] = new Block(gridPos, blockType);
+            }
+        }
 
-                // base
-                float baseNoise = Mathf.PerlinNoise(xCoord, zCoord) * 0.6f +
-                                  Mathf.PerlinNoise(xCoord * 2, zCoord * 2) * 0.3f +
-                                  Mathf.PerlinNoise(xCoord * 4, zCoord * 4) * 0.1f;
+        // generate extra blocks to fill in the gaps
+        foreach (var kvp in chunk.Blocks.ToList())
+        {
+            Vector3Int gridPos = kvp.Key;
+            Block block = kvp.Value;
+            
+            int blockY = gridPos.y;
+            int finalBlockCount = 0;
+        
+            foreach (Vector3Int dir in _horizontalDirs)
+            {
+                Block neighbour = GetNeighbour(chunk, gridPos, dir);
+                if (neighbour != null)
+                {
+                    int neighbourY = neighbour.Position.y;
+                    
+                    if (neighbourY >= blockY - 1) continue;
+                    
+                    int blockCount = blockY - neighbourY;
 
-                float heightCurve = Mathf.Pow(baseNoise, Sharpness);
-
-                // Large scale terrain variation
-                float continentNoise = Mathf.PerlinNoise(xCoord * 0.002f, zCoord * 0.002f);
-                float terrainScale = Mathf.Lerp(0.1f, 1.3f, continentNoise);
+                    if (blockCount > finalBlockCount) finalBlockCount = blockCount;
+                }
+            }
+        
+            if (finalBlockCount > 0)
+            {
+                Block.BlockTypes blockType = block.BlockType;
+                //if (blockType == Block.BlockTypes.Grass) blockType = Block.BlockTypes.Grass;
                 
-                // apply biome rules
-                terrainScale *= desertWeight * 0.5f + plainsWeight * 0.5f + mountainWeight * 3f;
-                heightCurve *= desertWeight * 1 + plainsWeight * 1 + mountainWeight * 1f;
-
-                // apply noise
-                int height = Mathf.RoundToInt(heightCurve * MaxBlockHeight * terrainScale);
-                float worldY = height * BlockSize;
-
-                currentBlockPos = new Vector3Int((int)blockPos.x, (int)worldY, (int)blockPos.y);
-                chunkBlockPositions.Add(currentBlockPos);
-
-                Block.BlockTypes blockType = Block.BlockTypes.Grass;
-                float maxWeight = Mathf.Max(desertWeight, Mathf.Max(plainsWeight, mountainWeight));
-
-                if (maxWeight == desertWeight) blockType = Block.BlockTypes.Sand;
-                else if (maxWeight == plainsWeight) blockType = Block.BlockTypes.Grass;
-                else if (maxWeight == mountainWeight) blockType = Block.BlockTypes.Stone;
-
-                chunk.Blocks[currentBlockPos] = new Block(currentBlockPos, blockType);
+                for (int i = 0; i < finalBlockCount; i++)
+                {
+                    Vector3Int newBlockPos = new Vector3Int(gridPos.x, blockY - i, gridPos.z);
+                    
+                    chunkBlockPositions.Add(newBlockPos);
+                    chunk.Blocks[newBlockPos] = new Block(newBlockPos, blockType);
+                }
             }
         }
         
         chunk.BlockPositions = chunkBlockPositions;
         chunk.IsGenerated = true;
+    }
+
+    private Block GetNeighbour(Chunk chunk, Vector3Int blockPos, Vector3Int dir)
+    {
+        int nx = blockPos.x + dir.x;
+        int nz = blockPos.z + dir.z;
+
+        foreach (var kvp in chunk.Blocks)
+        {
+            if (kvp.Key.x == nx && kvp.Key.z == nz)
+            {
+                return kvp.Value;
+            }
+        }
+
+        return null;
+    }
+    
+    private (int height, Block.BlockTypes blockType) CalculateHeightAndBiome(Vector2 blockPos, int offset)
+    {
+        float xCoord = (blockPos.x + offset) * NoiseScale;
+        float zCoord = (blockPos.y + offset) * NoiseScale;
+        
+        // biome
+        float biomeNoise = Mathf.PerlinNoise(xCoord * 0.5f, zCoord * 0.5f);
+        biomeNoise = Mathf.Pow(biomeNoise, 0.5f);
+        
+        float desertWeight   = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.4f) / 0.4f);
+        float plainsWeight   = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.5f) / 0.33f);
+        float mountainWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 1.0f) / 0.33f);
+
+        float total = desertWeight + plainsWeight + mountainWeight;
+        desertWeight   /= total;
+        plainsWeight   /= total;
+        mountainWeight /= total;
+
+        // base terrain
+        float baseNoise = Mathf.PerlinNoise(xCoord, zCoord) * 0.6f +
+                          Mathf.PerlinNoise(xCoord * 2, zCoord * 2) * 0.3f +
+                          Mathf.PerlinNoise(xCoord * 4, zCoord * 4) * 0.1f;
+
+        float heightCurve = Mathf.Pow(baseNoise, Sharpness);
+
+        // large scale terrain variation
+        float continentNoise = Mathf.PerlinNoise(xCoord * 0.002f, zCoord * 0.002f);
+        float terrainScale = Mathf.Lerp(0.1f, 1.3f, continentNoise);
+
+        // biome rules
+        terrainScale *= desertWeight * 0.5f + plainsWeight * 0.5f + mountainWeight * 3f;
+        heightCurve  *= desertWeight * 1f + plainsWeight * 1f + mountainWeight * 1f;
+
+        // final height
+        int height = Mathf.RoundToInt(heightCurve * MaxBlockHeight * terrainScale);
+
+        // biome → block type
+        Block.BlockTypes blockType = Block.BlockTypes.Grass;
+        float maxWeight = Mathf.Max(desertWeight, Mathf.Max(plainsWeight, mountainWeight));
+
+        if (maxWeight == desertWeight) blockType = Block.BlockTypes.Sand;
+        else if (maxWeight == plainsWeight) blockType = Block.BlockTypes.Grass;
+        else if (maxWeight == mountainWeight) blockType = Block.BlockTypes.Stone;
+
+        return (height, blockType);
     }
 
     private void LoadChunk(Chunk chunk)
@@ -240,16 +311,17 @@ public class GridControllerScr : MonoBehaviour
         if (chunk.ChunkObject == null)
         {
             chunk.ChunkObject = new GameObject($"Chunk {chunk.Position}");
-            chunk.ChunkObject.transform.position = Vector3.zero;
+            chunk.ChunkObject.transform.position = chunk.Position;
             
             MeshFilter mf = chunk.ChunkObject.AddComponent<MeshFilter>();
             MeshRenderer mr = chunk.ChunkObject.AddComponent<MeshRenderer>();
             
             // assign a material
-            mr.material = AtlasHelperScr.instance.blockMaterial;
+            mr.sharedMaterial = TextureHelperScr.instance.blockMaterial;
             
             // build mesh
             Mesh mesh = GenerateChunkMesh(chunk);
+            mesh.name = $"ChunkMesh_{chunk.Position.x}_{chunk.Position.y}_{chunk.Position.z}";
             mf.mesh = mesh;
             chunk.Mesh = mesh;
         }
@@ -399,22 +471,10 @@ public class GridControllerScr : MonoBehaviour
         float s = BlockSize;
 
         HashSet<Vector3Int> blockSet = new HashSet<Vector3Int>(chunk.BlockPositions);
-        
-        BlockTextures tex = new BlockTextures {
-            GrassTop = "Grass Top",
-            GrassBottom = "Grass Bottom",
-            GrassSide = "Grass Side 0",
-            SandTop = "Sand Top",
-            SandBottom = "Sand Bottom",
-            SandSide = "Sand Side0",
-            StoneTop = "Stone Top",
-            StoneBottom = "Stone Bottom",
-            StoneSide = "Stone Side0"
-        };
 
         foreach (Vector3Int b in chunk.BlockPositions)
         {
-            Vector3 pos = new Vector3(b.x, b.y, b.z);
+            Vector3 pos = new Vector3(b.x, b.y, b.z) * s;
 
             foreach (var dir in Directions)
             {
@@ -438,37 +498,25 @@ public class GridControllerScr : MonoBehaviour
                 triangles.Add(vertIndex + 0);
 
                 // pick uv rect based on face direction
-                string spriteName = tex.GrassBottom;
+                Vector3Int faceDir = dir.Offset;
+                if (faceDir == Vector3Int.left || faceDir == Vector3Int.right || faceDir == Vector3Int.back ||
+                    faceDir == Vector3Int.forward)
+                {
+                    int faceIndex = faceDir == Vector3Int.left ? 0 : 
+                                    faceDir == Vector3Int.right ? 1 : 
+                                    faceDir == Vector3Int.back ? 2 : 3;
+                    
+                    int rand = Mathf.Abs(Hash(b.x, b.y, b.z, faceIndex)) % 4;
 
-                if (chunk.Blocks[b].BlockType == Block.BlockTypes.Grass)
-                {
-                    if (dir.Offset == Vector3Int.up) spriteName = tex.GrassTop;
-                    else if (dir.Offset == Vector3Int.down) spriteName = tex.GrassBottom;
-                    else if (dir.Offset == Vector3Int.left) spriteName = tex.GrassSide;
-                    else if (dir.Offset == Vector3Int.back) spriteName = tex.GrassSide;
-                    else if (dir.Offset == Vector3Int.right) spriteName = tex.GrassSide;
-                    else if (dir.Offset == Vector3Int.forward) spriteName = tex.GrassSide;
+                    if (rand == 0) faceDir = Vector3Int.left;
+                    else if (rand == 1) faceDir = Vector3Int.right;
+                    else if (rand == 2) faceDir = Vector3Int.back;
+                    else faceDir = Vector3Int.forward;
                 }
-                else if (chunk.Blocks[b].BlockType == Block.BlockTypes.Sand)
-                {
-                    if (dir.Offset == Vector3Int.up) spriteName = tex.SandTop;
-                    else if (dir.Offset == Vector3Int.down) spriteName = tex.SandBottom;
-                    else if (dir.Offset == Vector3Int.left) spriteName = tex.SandSide;
-                    else if (dir.Offset == Vector3Int.back) spriteName = tex.SandSide;
-                    else if (dir.Offset == Vector3Int.right) spriteName = tex.SandSide;
-                    else if (dir.Offset == Vector3Int.forward) spriteName = tex.SandSide;
-                }
-                else if (chunk.Blocks[b].BlockType == Block.BlockTypes.Stone)
-                {
-                    if (dir.Offset == Vector3Int.up) spriteName = tex.StoneTop;
-                    else if (dir.Offset == Vector3Int.down) spriteName = tex.StoneBottom;
-                    else if (dir.Offset == Vector3Int.left) spriteName = tex.StoneSide;
-                    else if (dir.Offset == Vector3Int.back) spriteName = tex.StoneSide;
-                    else if (dir.Offset == Vector3Int.right) spriteName = tex.StoneSide;
-                    else if (dir.Offset == Vector3Int.forward) spriteName = tex.StoneSide;
-                }
+                
+                string spriteName = TextureHelperScr.instance.BlockTextures[(chunk.Blocks[b].BlockType, faceDir)];
 
-                Rect uvRect = AtlasHelperScr.instance.GetUVRect(spriteName);
+                Rect uvRect = TextureHelperScr.instance.GetUVRect(spriteName);
                 
                 // quad uvs in rect
                 uvs.Add(new Vector2(uvRect.xMin, uvRect.yMin));
@@ -490,6 +538,14 @@ public class GridControllerScr : MonoBehaviour
         mesh.RecalculateBounds();
 
         return mesh;
+    }
+    
+    private static int Hash(int x, int y, int z, int face)
+    {
+        int h = x * 374761393 + y * 668265263 + z * 2147483647 + face * 1274126177;
+        h = (h ^ (h >> 13)) * 1274126177;
+        h = h ^ (h >> 16);
+        return h;
     }
     
     private struct FaceDir
@@ -554,19 +610,6 @@ public class GridControllerScr : MonoBehaviour
             }
         }
     };
-
-    private struct BlockTextures
-    {
-        public string GrassTop;
-        public string GrassBottom;
-        public string GrassSide;
-        public string SandTop;
-        public string SandBottom;
-        public string SandSide;
-        public string StoneTop;
-        public string StoneBottom;
-        public string StoneSide;
-    }
 }
 
 
@@ -625,11 +668,4 @@ public class Chunk
         IsGenerated = isGenerated;
         LastUsedTime = Time.time;
     }
-}
-
-public enum BiomeTypes
-{
-    Plains, 
-    Desert, 
-    Mountain, 
 }
