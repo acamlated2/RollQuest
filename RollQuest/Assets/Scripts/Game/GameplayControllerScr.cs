@@ -34,12 +34,12 @@ public class GameplayControllerScr : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
     }
 
-    public void SetPlayerPosition(BlockScr centerBlock)
-    {
-        Vector3 spawnPosition = new Vector3(0, centerBlock.transform.position.y + 2, 0);
-
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        player.transform.position = spawnPosition;
-        player.GetComponent<PlayerScr>().currentBlockScr = centerBlock;
-    }
+    // public void SetPlayerPosition(BlockScr centerBlock)
+    // {
+    //     Vector3 spawnPosition = new Vector3(0, centerBlock.transform.position.y + 2, 0);
+    //
+    //     GameObject player = GameObject.FindGameObjectWithTag("Player");
+    //     player.transform.position = spawnPosition;
+    //     player.GetComponent<PlayerScr>().currentBlockScr = centerBlock;
+    // }
 }

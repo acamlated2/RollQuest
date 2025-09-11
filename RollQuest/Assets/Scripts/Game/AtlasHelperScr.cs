@@ -33,7 +33,7 @@ public class AtlasHelperScr : MonoBehaviour
 
         if (s == null)
         {
-            Debug.LogError($"Sprite {spriteName} not found in atlas!");
+            //Debug.LogError($"Sprite {spriteName} not found in atlas!");
             return Rect.zero;
         }
 

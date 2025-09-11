@@ -10,16 +10,13 @@ public class GridControllerScr : MonoBehaviour
 {
     public static GridControllerScr instance;
 
-    private Dictionary<Vector2Int, BlockScr> _blockLookup = new Dictionary<Vector2Int, BlockScr>();
-    private Dictionary<Vector2Int, Node> _nodeLookup = new Dictionary<Vector2Int, Node>();
-
-    private const float NoiseScale = 0.008f;
+    private const float NoiseScale = 0.01f;
     private const int MaxBlockHeight = 64;
     private const float Sharpness = 2.5f;
     
     private const float BlockSize = 2;
-    private const int ChunkBlockSize = 8;
-    private const float LoadRadius = 100;
+    private const int ChunkBlockSize = 16;
+    private const float LoadRadius = 500;
     private const int ChunkWorldSize = (int)(ChunkBlockSize * BlockSize);
     
     private Dictionary<Vector3, Chunk> _savedChunks = new Dictionary<Vector3, Chunk>();
@@ -29,15 +26,10 @@ public class GridControllerScr : MonoBehaviour
     private ConcurrentQueue<Chunk> _generatedChunks = new ConcurrentQueue<Chunk>();
     
     private Queue<Chunk> _chunksToLoad = new Queue<Chunk>();
-    private bool _isLoadingChunks = false;
+    private bool _isLoadingChunks;
     
     private Queue<Chunk> _chunksToUnload = new Queue<Chunk>();
-    private bool _isUnloadingChunks = false;
-
-    private const int BlockBatchCount = 5;
-    
-    [SerializeField] private ObjectPoolScr grassObjectPool;
-    [SerializeField] private ObjectPoolScr dirtObjectPool;
+    private bool _isUnloadingChunks;
     
     private GameObject _player;
 
@@ -65,7 +57,8 @@ public class GridControllerScr : MonoBehaviour
         LoadPlayerChunk();
         LoadChunks();
         
-        GameplayControllerScr.instance.SetPlayerPosition(GetGridBlock(0, 0));
+        // GameplayControllerScr.instance.SetPlayerPosition();
+        Debug.LogError("set player position first");
     }
 
     private void Update()
@@ -80,29 +73,6 @@ public class GridControllerScr : MonoBehaviour
         
         if (!_isLoadingChunks && _chunksToLoad.Count > 0)
             StartCoroutine(ProcessChunksLoading());
-    }
-
-    public void UpdatePlayerPosition()
-    {
-        Vector3Int playerChunk = GetPlayerChunkPos();
-
-        if (playerChunk != _lastPlayerChunkPos)
-        {
-            LoadChunks();
-            _lastPlayerChunkPos = playerChunk;
-        }
-    }
-
-    public BlockScr GetGridBlock(int x, int z)
-    {
-        _blockLookup.TryGetValue(new Vector2Int(x, z), out var block);
-        return block;
-    }
-
-    public Node GetNode(int x, int z)
-    {
-        _nodeLookup.TryGetValue(new Vector2Int(x, z), out var node);
-        return node;
     }
 
     private void LoadChunks()
@@ -180,19 +150,19 @@ public class GridControllerScr : MonoBehaviour
     {
         Task.Run((() =>
         {
-            GenerateChunkBlockPositions(chunk);
+            GenerateChunk(chunk);
             _generatedChunks.Enqueue(chunk);
         }));
     }
 
-    private void GenerateChunk(Chunk chunk)
+    private void GenerateChunkImmediate(Chunk chunk)
     {
-        GenerateChunkBlockPositions(chunk);
+        GenerateChunk(chunk);
         
         _savedChunks[chunk.Position] = chunk;
     }
 
-    private void GenerateChunkBlockPositions(Chunk chunk)
+    private void GenerateChunk(Chunk chunk)
     {
         Vector2 origin = new Vector2(
             chunk.Position.x - ChunkWorldSize / 2,
@@ -200,6 +170,8 @@ public class GridControllerScr : MonoBehaviour
 
         int offset = GameplayControllerScr.instance.seed % 1000;
         List<Vector3Int> chunkBlockPositions = new List<Vector3Int>(ChunkBlockSize * ChunkBlockSize);
+        
+        Vector3Int currentBlockPos;
             
         for (int x = 0; x < ChunkBlockSize; x++) 
         {
@@ -209,6 +181,19 @@ public class GridControllerScr : MonoBehaviour
 
                 float xCoord = (blockPos.x + offset) * NoiseScale;
                 float zCoord = (blockPos.y + offset) * NoiseScale;
+                
+                // biome
+                float biomeNoise = Mathf.PerlinNoise(xCoord * 0.5f, zCoord * 0.5f);
+                biomeNoise = Mathf.Pow(biomeNoise, 0.5f);
+
+                float desertWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.4f) / 0.4f);
+                float plainsWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.5f) / 0.33f);
+                float mountainWeight = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 1.0f) / 0.33f);
+                
+                float total = desertWeight + plainsWeight + mountainWeight;
+                desertWeight /= total;
+                plainsWeight /= total;
+                mountainWeight /= total;
 
                 // base
                 float baseNoise = Mathf.PerlinNoise(xCoord, zCoord) * 0.6f +
@@ -219,44 +204,32 @@ public class GridControllerScr : MonoBehaviour
 
                 // Large scale terrain variation
                 float continentNoise = Mathf.PerlinNoise(xCoord * 0.002f, zCoord * 0.002f);
-                float terrainScale = Mathf.Lerp(0.5f, 1.3f, continentNoise);
-
-                int height = Mathf.RoundToInt(heightCurve * MaxBlockHeight * terrainScale);
+                float terrainScale = Mathf.Lerp(0.1f, 1.3f, continentNoise);
                 
+                // apply biome rules
+                terrainScale *= desertWeight * 0.5f + plainsWeight * 0.5f + mountainWeight * 3f;
+                heightCurve *= desertWeight * 1 + plainsWeight * 1 + mountainWeight * 1f;
+
+                // apply noise
+                int height = Mathf.RoundToInt(heightCurve * MaxBlockHeight * terrainScale);
                 float worldY = height * BlockSize;
 
-                chunkBlockPositions.Add(new Vector3Int((int)blockPos.x, (int)worldY, (int)blockPos.y));
+                currentBlockPos = new Vector3Int((int)blockPos.x, (int)worldY, (int)blockPos.y);
+                chunkBlockPositions.Add(currentBlockPos);
+
+                Block.BlockTypes blockType = Block.BlockTypes.Grass;
+                float maxWeight = Mathf.Max(desertWeight, Mathf.Max(plainsWeight, mountainWeight));
+
+                if (maxWeight == desertWeight) blockType = Block.BlockTypes.Sand;
+                else if (maxWeight == plainsWeight) blockType = Block.BlockTypes.Grass;
+                else if (maxWeight == mountainWeight) blockType = Block.BlockTypes.Stone;
+
+                chunk.Blocks[currentBlockPos] = new Block(currentBlockPos, blockType);
             }
         }
         
         chunk.BlockPositions = chunkBlockPositions;
         chunk.IsGenerated = true;
-    }
-
-    private IEnumerator LoadChunkAsync(Chunk chunk)
-    {
-        if (!_savedChunks.ContainsValue(chunk))
-            yield break;
-
-        if (chunk.ChunkObject == null)
-        {
-            chunk.ChunkObject = new GameObject($"Chunk {chunk.Position}");
-            chunk.ChunkObject.transform.position = Vector3.zero;
-            
-            MeshFilter mf = chunk.ChunkObject.AddComponent<MeshFilter>();
-            MeshRenderer mr = chunk.ChunkObject.AddComponent<MeshRenderer>();
-            
-            // assign a material
-            mr.material = AtlasHelperScr.instance.blockMaterial;
-            
-            // build mesh
-            Mesh mesh = GenerateChunkMesh(chunk);
-            mf.mesh = mesh;
-            chunk.Mesh = mesh;
-        }
-        
-        chunk.LastUsedTime = Time.time;
-        chunk.IsLoaded = true;
     }
 
     private void LoadChunk(Chunk chunk)
@@ -307,7 +280,8 @@ public class GridControllerScr : MonoBehaviour
             else
             {
                 _chunksToLoad.Dequeue();
-                yield return LoadChunkAsync(chunk);
+                LoadChunk(chunk);
+                yield return null; // wait a frame and run again
             }
         }
         
@@ -322,7 +296,8 @@ public class GridControllerScr : MonoBehaviour
         {
             Chunk chunk = _chunksToUnload.Dequeue();
 
-            yield return UnloadChunkAsync(chunk); // wait until finished before next chunk
+            UnloadChunk(chunk);
+            yield return null; // wait a frame and run again
         }
         
         CleanupCache();
@@ -330,82 +305,15 @@ public class GridControllerScr : MonoBehaviour
         _isUnloadingChunks = false;
     }
 
-    private IEnumerator UnloadChunkAsync(Chunk chunk)
+    private void UnloadChunk(Chunk chunk)
     {
         if (chunk.ChunkObject != null)
         {
-            GameObject.Destroy(chunk.ChunkObject);
+            Destroy(chunk.ChunkObject);
             chunk.ChunkObject = null;
         }
 
         chunk.IsLoaded = false;
-        yield break;
-    }
-
-    private void SpawnBlock(Vector3 blockPos)
-    {
-        // spawn block
-        GameObject newBlock = grassObjectPool.GetObject();
-        newBlock.transform.position = blockPos;
-        newBlock.transform.name = "Grass " + blockPos.x + " " + blockPos.z;
-        
-        // add node
-        Vector3Int virtualBlockPos = new Vector3Int(
-            (int)(newBlock.transform.position.x / BlockSize),
-            (int)(newBlock.transform.position.y / BlockSize),
-            (int)(newBlock.transform.position.z / BlockSize));
-        
-        BlockScr blockScr = newBlock.GetComponent<BlockScr>();
-            
-        blockScr.gridPos = virtualBlockPos;
-            
-        Node newNode = new Node(virtualBlockPos.x, virtualBlockPos.y, virtualBlockPos.z, newBlock);
-        blockScr.Node = newNode;
-        
-        Vector2Int gridKey = new Vector2Int(virtualBlockPos.x, virtualBlockPos.z);
-        
-        _blockLookup[gridKey] = blockScr;
-        _nodeLookup[gridKey] = newNode;
-        
-        // generate dirt below
-        GenerateDirtBelow(newBlock);
-    }
-
-    private void GenerateDirtBelow(GameObject block)
-    {
-        BlockScr blockScr = block.GetComponent<BlockScr>();
-        
-        int finalDirtCount = 0;
-        List<Node> neighbourList = GetNeighbourList(blockScr.Node);
-            
-        int blockGridHeight = blockScr.gridPos.y;
-        
-        foreach (Node node in neighbourList)
-        {
-            int neighbourGridHeight = node.Block.GetComponent<BlockScr>().gridPos.y;;
-        
-            if (neighbourGridHeight >= blockGridHeight - 1)
-            {
-                continue;
-            }
-                
-            int dirtCount = blockGridHeight - neighbourGridHeight;
-        
-            if (dirtCount > finalDirtCount)
-            {
-                finalDirtCount = dirtCount;
-            }
-        }
-        
-        for (int i = 0; i < finalDirtCount; i++)
-        {
-            Vector3 spawnPosition = new Vector3(block.transform.position.x, block.transform.position.y - i * 2 - 2,
-                block.transform.position.z);
-        
-            GameObject newBlock = dirtObjectPool.GetObject();
-            newBlock.transform.position = spawnPosition;
-            newBlock.transform.name = "Dirt " + spawnPosition.x + " " + spawnPosition.y + " " + spawnPosition.z;
-        }
     }
 
     private void LoadPlayerChunk()
@@ -422,7 +330,7 @@ public class GridControllerScr : MonoBehaviour
         {
             chunk = new Chunk(center, false);
             _savedChunks[center] = chunk;
-            GenerateChunk(chunk);
+            GenerateChunkImmediate(chunk);
             LoadChunk(chunk);
         }
     }
@@ -493,12 +401,15 @@ public class GridControllerScr : MonoBehaviour
         HashSet<Vector3Int> blockSet = new HashSet<Vector3Int>(chunk.BlockPositions);
         
         BlockTextures tex = new BlockTextures {
-            Top = "Grass Top",
-            Bottom = "Grass Bottom",
-            Side0 = "Grass Side 0",
-            Side1 = "Grass Side 1",
-            Side2 = "Grass Side 2",
-            Side3 = "Grass Side 3"
+            GrassTop = "Grass Top",
+            GrassBottom = "Grass Bottom",
+            GrassSide = "Grass Side 0",
+            SandTop = "Sand Top",
+            SandBottom = "Sand Bottom",
+            SandSide = "Sand Side0",
+            StoneTop = "Stone Top",
+            StoneBottom = "Stone Bottom",
+            StoneSide = "Stone Side0"
         };
 
         foreach (Vector3Int b in chunk.BlockPositions)
@@ -527,13 +438,35 @@ public class GridControllerScr : MonoBehaviour
                 triangles.Add(vertIndex + 0);
 
                 // pick uv rect based on face direction
-                string spriteName = tex.Bottom;
-                if (dir.Offset == Vector3Int.up) spriteName = tex.Top;
-                else if (dir.Offset == Vector3Int.down) spriteName = tex.Bottom;
-                else if (dir.Offset == Vector3Int.left) spriteName = tex.Side0;
-                else if (dir.Offset == Vector3Int.back) spriteName = tex.Side1;
-                else if (dir.Offset == Vector3Int.right) spriteName = tex.Side2;
-                else if (dir.Offset == Vector3Int.forward) spriteName = tex.Side3;
+                string spriteName = tex.GrassBottom;
+
+                if (chunk.Blocks[b].BlockType == Block.BlockTypes.Grass)
+                {
+                    if (dir.Offset == Vector3Int.up) spriteName = tex.GrassTop;
+                    else if (dir.Offset == Vector3Int.down) spriteName = tex.GrassBottom;
+                    else if (dir.Offset == Vector3Int.left) spriteName = tex.GrassSide;
+                    else if (dir.Offset == Vector3Int.back) spriteName = tex.GrassSide;
+                    else if (dir.Offset == Vector3Int.right) spriteName = tex.GrassSide;
+                    else if (dir.Offset == Vector3Int.forward) spriteName = tex.GrassSide;
+                }
+                else if (chunk.Blocks[b].BlockType == Block.BlockTypes.Sand)
+                {
+                    if (dir.Offset == Vector3Int.up) spriteName = tex.SandTop;
+                    else if (dir.Offset == Vector3Int.down) spriteName = tex.SandBottom;
+                    else if (dir.Offset == Vector3Int.left) spriteName = tex.SandSide;
+                    else if (dir.Offset == Vector3Int.back) spriteName = tex.SandSide;
+                    else if (dir.Offset == Vector3Int.right) spriteName = tex.SandSide;
+                    else if (dir.Offset == Vector3Int.forward) spriteName = tex.SandSide;
+                }
+                else if (chunk.Blocks[b].BlockType == Block.BlockTypes.Stone)
+                {
+                    if (dir.Offset == Vector3Int.up) spriteName = tex.StoneTop;
+                    else if (dir.Offset == Vector3Int.down) spriteName = tex.StoneBottom;
+                    else if (dir.Offset == Vector3Int.left) spriteName = tex.StoneSide;
+                    else if (dir.Offset == Vector3Int.back) spriteName = tex.StoneSide;
+                    else if (dir.Offset == Vector3Int.right) spriteName = tex.StoneSide;
+                    else if (dir.Offset == Vector3Int.forward) spriteName = tex.StoneSide;
+                }
 
                 Rect uvRect = AtlasHelperScr.instance.GetUVRect(spriteName);
                 
@@ -624,176 +557,16 @@ public class GridControllerScr : MonoBehaviour
 
     private struct BlockTextures
     {
-        public string Top;
-        public string Bottom;
-        public string Side0;
-        public string Side1;
-        public string Side2;
-        public string Side3;
+        public string GrassTop;
+        public string GrassBottom;
+        public string GrassSide;
+        public string SandTop;
+        public string SandBottom;
+        public string SandSide;
+        public string StoneTop;
+        public string StoneBottom;
+        public string StoneSide;
     }
-
-    // public List<Node> GetNodeCrossDeepNeighbourList(Node node, int depth)
-    // {
-    //     List<Node> neighbourList = new List<Node>() { node };
-    //     List<Node> checkList = new List<Node>() { node };
-    //
-    //     for (int i = 0; i < depth; i++)
-    //     {
-    //         List<Node> neighboursInDepth = new List<Node>();
-    //         foreach (Node nodeToCheck in checkList)
-    //         {
-    //             List<Node> newNeighbourList = GetNeighbourList(nodeToCheck);
-    //
-    //
-    //             foreach (Node newNeighbour in newNeighbourList)
-    //             {
-    //                 if (neighbourList.Contains(newNeighbour))
-    //                 {
-    //                     continue;
-    //                 }
-    //
-    //                 neighboursInDepth.Add(newNeighbour);
-    //                 neighbourList.Add(newNeighbour);
-    //             }
-    //         }
-    //
-    //         foreach (Node newNeighbour in neighboursInDepth)
-    //         {
-    //             checkList.Add(newNeighbour);
-    //         }
-    //     }
-    //
-    //     return neighbourList;
-    // }
-    //
-    // public List<Node> GetNodeSquareDeepNeighbourList(Node node, int depth)
-    // {
-    //     List<Node> neighbourList = new List<Node>();
-    //
-    //     int centreX = node.GridPos.x;
-    //     int centreZ = node.GridPos.z;
-    //
-    //     for (int dx = -depth; dx <= depth; dx++)
-    //     {
-    //         for (int dy = -depth; dy <= depth; dy++)
-    //         {
-    //             int newX = centreX + dx;
-    //             int newZ = centreZ + dy;
-    //
-    //             // Ensure the new coordinates are within the grid bounds
-    //             Node newNeighbour = GetNode(newX, newZ);
-    //             if (newNeighbour != null)
-    //             {
-    //                 neighbourList.Add(newNeighbour);
-    //             }
-    //         }
-    //     }
-    //
-    //     return neighbourList;
-    // }
-
-    public List<Node> GetNeighbourList(Node node)
-    {
-        List<Node> neighbourList = new List<Node>();
-
-        // left
-        Node leftNeighbour = GetNode(node.GridPos.x - 1, node.GridPos.z);
-        if (leftNeighbour != null)
-        {
-            neighbourList.Add(leftNeighbour);
-        }
-
-        // right
-        Node rightNeighbour = GetNode(node.GridPos.x + 1, node.GridPos.z);
-        if (rightNeighbour != null)
-        {
-            neighbourList.Add(rightNeighbour);
-        }
-
-        // top 
-        Node topNeighbour = GetNode(node.GridPos.x, node.GridPos.z + 1);
-        if (topNeighbour != null)
-        {
-            neighbourList.Add(topNeighbour);
-        }
-
-        // bottom
-        Node bottomNeighbour = GetNode(node.GridPos.x, node.GridPos.z - 1);
-        if (bottomNeighbour != null)
-        {
-            neighbourList.Add(bottomNeighbour);
-        }
-
-        return neighbourList;
-    }
-
-    // private GameObject ReplaceBlock(GameObject targetBlock, BlockScript.BlockType newBlockType)
-    // {
-    //     GameObject newGridBlock = Instantiate(GetBlockPrefab(newBlockType),
-    //                                           targetBlock.transform.position,
-    //                                           Quaternion.identity);
-    //     BlockScript gridBlock = GetGridBlock(targetBlock.GetComponent<BlockScript>().gridPos.x,
-    //                                          targetBlock.GetComponent<BlockScript>().gridPos.z);
-    //
-    //     newGridBlock.transform.name = newBlockType +
-    //                                   " " +
-    //                                   targetBlock.GetComponent<BlockScript>().gridPos.x +
-    //                                   " " +
-    //                                   targetBlock.GetComponent<BlockScript>().gridPos.z;
-    //     
-    //     newGridBlock.transform.parent = GameObject.FindGameObjectWithTag("Ground Parent").transform;
-    //     newGridBlock.GetComponent<BlockScript>().Node =
-    //         targetBlock.GetComponent<BlockScript>().Node;
-    //     newGridBlock.GetComponent<BlockScript>().Node.Block = newGridBlock;
-    //     
-    //     newGridBlock.GetComponent<BlockScript>().gridPos.x = gridBlock.gridPos.x;
-    //     newGridBlock.GetComponent<BlockScript>().gridPos.y = gridBlock.gridPos.y;
-    //     newGridBlock.GetComponent<BlockScript>().gridPos.z = gridBlock.gridPos.z;
-    //     
-    //     blockGrid.Add(newGridBlock);
-    //     blockGrid.Remove(targetBlock);
-    //
-    //     if (targetBlock.GetComponent<BlockScript>().blockType == BlockScript.BlockType.Sand)
-    //     {
-    //         foreach (GameObject enemy in targetBlock.GetComponent<SandScript>().enemies)
-    //         {
-    //             enemy.GetComponent<EnemyScript>().FindCurrentBlock();
-    //             enemy.GetComponent<EnemyScript>().MoveToCurrentBlock(() => { });
-    //         }
-    //         targetBlock.GetComponent<SandScript>().enemies.Clear();
-    //     }
-    //     
-    //     Destroy(targetBlock);
-    //
-    //     return newGridBlock;
-    // }
-    //
-    // private GameObject GetBlockPrefab(BlockScript.BlockType blockType)
-    // {
-    //     switch (blockType)
-    //     {
-    //
-    //         case BlockScript.BlockType.Grass:
-    //             return PrefabsScript.instance.grassPrefab;
-    //         case BlockScript.BlockType.Sand:
-    //             return PrefabsScript.instance.sandPrefab;
-    //         case BlockScript.BlockType.Wood:
-    //             break;
-    //         case BlockScript.BlockType.Stone:
-    //             break;
-    //         case BlockScript.BlockType.Tree:
-    //             break;
-    //         case BlockScript.BlockType.Platform:
-    //             break;
-    //         case BlockScript.BlockType.Tower:
-    //             break;
-    //         case BlockScript.BlockType.Water:
-    //             return PrefabsScript.instance.waterPrefab;
-    //         default:
-    //             throw new ArgumentOutOfRangeException(nameof(blockType), blockType, null);
-    //     }
-    //     return null;
-    // }
 }
 
 
@@ -820,11 +593,11 @@ public class Node
         GridPos.z = Mathf.RoundToInt(zPos);
         Block = block;
 
-        Block.GetComponent<BlockScr>().gridPos.x = xPos;
-        Block.GetComponent<BlockScr>().gridPos.y = yPos;
-        Block.GetComponent<BlockScr>().gridPos.z = zPos;
+        Block.GetComponent<Block>().Position.x = xPos;
+        Block.GetComponent<Block>().Position.y = yPos;
+        Block.GetComponent<Block>().Position.z = zPos;
         
-        Block.GetComponent<BlockScr>().Node = this;
+        Block.GetComponent<Block>().Node = this;
     }
 
     public void CalculateFCost()
@@ -843,6 +616,8 @@ public class Chunk
     
     public GameObject ChunkObject;
     public Mesh Mesh;
+    
+    public Dictionary<Vector3Int, Block> Blocks = new Dictionary<Vector3Int, Block>();
 
     public Chunk(Vector3 chunkPos, bool isGenerated)
     {
@@ -850,4 +625,11 @@ public class Chunk
         IsGenerated = isGenerated;
         LastUsedTime = Time.time;
     }
+}
+
+public enum BiomeTypes
+{
+    Plains, 
+    Desert, 
+    Mountain, 
 }
