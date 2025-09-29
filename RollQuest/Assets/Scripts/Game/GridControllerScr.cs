@@ -11,16 +11,15 @@ public class GridControllerScr : MonoBehaviour
 {
     public static GridControllerScr instance;
 
-    private const float NoiseScale = 0.01f;
+    private const float NoiseScale = 0.02f;
     private const int MaxBlockHeight = 64;
     private const float Sharpness = 2.5f;
     
-    private const float BlockSize = 2;
     private const int ChunkBlockSize = 16;
-    private const float LoadRadius = 500;
-    private const int ChunkWorldSize = (int)(ChunkBlockSize * BlockSize);
+    private const float LoadRadius = 100;
+    private const int ChunkWorldSize = (int)(ChunkBlockSize * Globals.BlockSize);
     
-    private Dictionary<Vector3, Chunk> _savedChunks = new Dictionary<Vector3, Chunk>();
+    private Dictionary<Vector3Int, Chunk> _savedChunks = new Dictionary<Vector3Int, Chunk>();
     
     private const int MaxCachedChunks = 100;
     
@@ -64,10 +63,10 @@ public class GridControllerScr : MonoBehaviour
     private void Start()
     {
         LoadPlayerChunk();
-        LoadChunks();
         
-        // GameplayControllerScr.instance.SetPlayerPosition();
-        Debug.LogError("set player position first");
+        GameplayControllerScr.instance.SetPlayerPosition(GetClosestTopMostBlock(_player.transform.position));
+        
+        LoadChunks();
     }
 
     private void Update()
@@ -99,10 +98,10 @@ public class GridControllerScr : MonoBehaviour
             int chunkZ = playerChunk.z + offset.y;
 
             // world position of center of chunk
-            Vector3 center = new Vector3(
-                chunkX * ChunkWorldSize + ChunkWorldSize / 2,
-                0f,
-                chunkZ * ChunkWorldSize + ChunkWorldSize / 2
+            Vector3Int center = new Vector3Int(
+                chunkX * ChunkWorldSize,
+                0,
+                chunkZ * ChunkWorldSize
             );
                 
             if ((_player.transform.position - center).sqrMagnitude <= sqrRadius)
@@ -122,7 +121,7 @@ public class GridControllerScr : MonoBehaviour
         _chunksToLoadSet = new HashSet<Chunk>(_chunksToLoad);
         
         // remove chunks that are no longer needed
-        foreach (KeyValuePair<Vector3, Chunk> kvp in _savedChunks)
+        foreach (KeyValuePair<Vector3Int, Chunk> kvp in _savedChunks)
         {
             if (!_newChunksToLoadSet.Contains(kvp.Value))
             {
@@ -146,13 +145,22 @@ public class GridControllerScr : MonoBehaviour
     private Vector3Int GetPlayerChunkPos()
     {
         Vector3 playerPos = _player.transform.position;
-        Vector3Int playerChunk = new Vector3Int(
-            Mathf.FloorToInt(playerPos.x / ChunkWorldSize),
-            0,
-            Mathf.FloorToInt(playerPos.z / ChunkWorldSize)
-        );
+        Vector3Int playerChunk = GetChunkPos(playerPos);
 
         return playerChunk;
+    }
+
+    private Vector3Int GetChunkPos(Vector3 worldPos)
+    {
+        float halfSize = ChunkWorldSize / 2;
+        
+        Vector3Int chunk = new Vector3Int(
+            Mathf.FloorToInt((worldPos.x + halfSize) / ChunkWorldSize) * ChunkWorldSize,
+            0,
+            Mathf.FloorToInt((worldPos.z + halfSize) / ChunkWorldSize) * ChunkWorldSize
+        );
+
+        return chunk;
     }
 
     private void GenerateChunkAsync(Chunk chunk)
@@ -178,14 +186,15 @@ public class GridControllerScr : MonoBehaviour
             chunk.Position.z - ChunkWorldSize / 2);
 
         int offset = GameplayControllerScr.instance.seed % 1000;
-        List<Vector3Int> chunkBlockPositions = new List<Vector3Int>(ChunkBlockSize * ChunkBlockSize);
+        HashSet<Vector3Int> chunkBlockPositions = new HashSet<Vector3Int>(ChunkBlockSize * ChunkBlockSize);
             
         // generate top surface
         for (int x = 0; x < ChunkBlockSize; x++) 
         {
-            for (int z = 0; z < ChunkBlockSize; z++) 
+            for (int z = 0; z < ChunkBlockSize; z++)
             {
-                Vector2 worldXZ = origin + new Vector2(x * BlockSize, z * BlockSize);
+                Vector2 worldXZ = origin + new Vector2(x * Globals.BlockSize + Globals.BlockSize / 2,
+                    z * Globals.BlockSize + Globals.BlockSize / 2);
 
                 // get height and biome data
                 (int height, Block.BlockTypes blockType) = CalculateHeightAndBiome(worldXZ, offset);
@@ -224,7 +233,6 @@ public class GridControllerScr : MonoBehaviour
             if (finalBlockCount > 0)
             {
                 Block.BlockTypes blockType = block.BlockType;
-                //if (blockType == Block.BlockTypes.Grass) blockType = Block.BlockTypes.Grass;
                 
                 for (int i = 0; i < finalBlockCount; i++)
                 {
@@ -235,8 +243,24 @@ public class GridControllerScr : MonoBehaviour
                 }
             }
         }
+
+        foreach (var position in chunkBlockPositions)
+        {
+            Vector3Int pos = position;
+            pos.y = 0;
+        }
         
-        chunk.BlockPositions = chunkBlockPositions;
+        int halfSize = ChunkWorldSize / 2;
+
+        chunk.BlockPositions = chunkBlockPositions
+            .GroupBy(pos => new Vector2Int(pos.x - halfSize, pos.z - halfSize))
+            .SelectMany(g =>
+            {
+                var ordered = g.OrderByDescending(p => p.y).ToList();
+
+                return ordered.Select((p, i) =>
+                    new KeyValuePair<Vector3Int, Vector3Int>(new Vector3Int(p.x - halfSize, p.z - halfSize, i), p));
+            }).ToDictionary(kv => kv.Key, kv => kv.Value);
         chunk.IsGenerated = true;
     }
 
@@ -390,18 +414,12 @@ public class GridControllerScr : MonoBehaviour
 
     private void LoadPlayerChunk()
     {
-        Vector3 playerChunk = GetPlayerChunkPos();
+        Vector3Int playerChunk = GetPlayerChunkPos();
         
-        Vector3 center = new Vector3(
-            playerChunk.x * ChunkWorldSize + ChunkWorldSize / 2,
-            0f,
-            playerChunk.z * ChunkWorldSize + ChunkWorldSize / 2
-        );
-        
-        if (!_savedChunks.TryGetValue(center, out Chunk chunk))
+        if (!_savedChunks.TryGetValue(playerChunk, out Chunk chunk))
         {
-            chunk = new Chunk(center, false);
-            _savedChunks[center] = chunk;
+            chunk = new Chunk(playerChunk, false);
+            _savedChunks[playerChunk] = chunk;
             GenerateChunkImmediate(chunk);
             LoadChunk(chunk);
         }
@@ -468,17 +486,17 @@ public class GridControllerScr : MonoBehaviour
         List<Vector2> uvs = new List<Vector2>();
 
         int vertIndex = 0;
-        float s = BlockSize;
+        float s = Globals.BlockSize;
 
-        HashSet<Vector3Int> blockSet = new HashSet<Vector3Int>(chunk.BlockPositions);
+        HashSet<Vector3Int> blockSet = chunk.BlockPositions.Values.ToHashSet();
 
-        foreach (Vector3Int b in chunk.BlockPositions)
+        foreach (Vector3Int block in blockSet)
         {
-            Vector3 pos = new Vector3(b.x, b.y, b.z) * s;
+            Vector3 pos = new Vector3(block.x, block.y, block.z) * s;
 
             foreach (var dir in Directions)
             {
-                Vector3Int neighbour = b + dir.Offset;
+                Vector3Int neighbour = block + dir.Offset;
                 if (blockSet.Contains(neighbour))
                     continue; // hidden face
 
@@ -506,7 +524,7 @@ public class GridControllerScr : MonoBehaviour
                                     faceDir == Vector3Int.right ? 1 : 
                                     faceDir == Vector3Int.back ? 2 : 3;
                     
-                    int rand = Mathf.Abs(Hash(b.x, b.y, b.z, faceIndex)) % 4;
+                    int rand = Mathf.Abs(Hash(block.x, block.y, block.z, faceIndex)) % 4;
 
                     if (rand == 0) faceDir = Vector3Int.left;
                     else if (rand == 1) faceDir = Vector3Int.right;
@@ -514,7 +532,7 @@ public class GridControllerScr : MonoBehaviour
                     else faceDir = Vector3Int.forward;
                 }
                 
-                string spriteName = TextureHelperScr.instance.BlockTextures[(chunk.Blocks[b].BlockType, faceDir)];
+                string spriteName = TextureHelperScr.instance.BlockTextures[(chunk.Blocks[block].BlockType, faceDir)];
 
                 Rect uvRect = TextureHelperScr.instance.GetUVRect(spriteName);
                 
@@ -536,6 +554,23 @@ public class GridControllerScr : MonoBehaviour
         mesh.SetUVs(0, uvs);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
+        
+        // --- recentre pivot ---
+        Vector3 min = mesh.bounds.min;
+        Vector3 max = mesh.bounds.max;
+        Vector3 center = (min + max) * 0.5f;
+        center.y = 0;
+        
+        // add offset so the grid lines up with the world grid
+        center.z += Globals.BlockSize / 2;
+        center.x += Globals.BlockSize / 2;
+
+        // offset verts
+        for (int i = 0; i < vertices.Count; i++)
+            vertices[i] -= center;
+
+        mesh.SetVertices(vertices);
+        mesh.RecalculateBounds();
 
         return mesh;
     }
@@ -556,21 +591,21 @@ public class GridControllerScr : MonoBehaviour
 
     private static readonly FaceDir[] Directions = new FaceDir[]
     {
-        // Top (+Y) -> verts ordered so normal points +Y
+        // Top (+Y)
         new FaceDir {
             Offset = new Vector3Int(0, 1, 0),
             Verts = new [] {
-                new Vector3(0,1,0), new Vector3(0,1,1),
-                new Vector3(1,1,1), new Vector3(1,1,0)
+                new Vector3(-0.5f, 0.5f, -0.5f), new Vector3(-0.5f, 0.5f, 0.5f),
+                new Vector3(0.5f, 0.5f, 0.5f),  new Vector3(0.5f, 0.5f, -0.5f)
             }
         },
 
-        // Bottom (-Y) -> verts ordered so normal points -Y
+        // Bottom (-Y)
         new FaceDir {
             Offset = new Vector3Int(0, -1, 0),
             Verts = new [] {
-                new Vector3(0,0,0), new Vector3(1,0,0),
-                new Vector3(1,0,1), new Vector3(0,0,1)
+                new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(0.5f, -0.5f, 0.5f),   new Vector3(-0.5f, -0.5f, 0.5f)
             }
         },
 
@@ -578,8 +613,8 @@ public class GridControllerScr : MonoBehaviour
         new FaceDir {
             Offset = new Vector3Int(0, 0, 1),
             Verts = new [] {
-                new Vector3(0,0,1), new Vector3(1,0,1),
-                new Vector3(1,1,1), new Vector3(0,1,1)
+                new Vector3(-0.5f, -0.5f, 0.5f), new Vector3(0.5f, -0.5f, 0.5f),
+                new Vector3(0.5f, 0.5f, 0.5f),   new Vector3(-0.5f, 0.5f, 0.5f)
             }
         },
 
@@ -587,8 +622,8 @@ public class GridControllerScr : MonoBehaviour
         new FaceDir {
             Offset = new Vector3Int(0, 0, -1),
             Verts = new [] {
-                new Vector3(1,0,0), new Vector3(0,0,0),
-                new Vector3(0,1,0), new Vector3(1,1,0)
+                new Vector3(0.5f, -0.5f, -0.5f), new Vector3(-0.5f, -0.5f, -0.5f),
+                new Vector3(-0.5f, 0.5f, -0.5f), new Vector3(0.5f, 0.5f, -0.5f)
             }
         },
 
@@ -596,8 +631,8 @@ public class GridControllerScr : MonoBehaviour
         new FaceDir {
             Offset = new Vector3Int(1, 0, 0),
             Verts = new [] {
-                new Vector3(1,0,1), new Vector3(1,0,0),
-                new Vector3(1,1,0), new Vector3(1,1,1)
+                new Vector3(0.5f, -0.5f, 0.5f), new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(0.5f, 0.5f, -0.5f), new Vector3(0.5f, 0.5f, 0.5f)
             }
         },
 
@@ -605,11 +640,50 @@ public class GridControllerScr : MonoBehaviour
         new FaceDir {
             Offset = new Vector3Int(-1, 0, 0),
             Verts = new [] {
-                new Vector3(0,0,0), new Vector3(0,0,1),
-                new Vector3(0,1,1), new Vector3(0,1,0)
+                new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(-0.5f, -0.5f, 0.5f),
+                new Vector3(-0.5f, 0.5f, 0.5f),   new Vector3(-0.5f, 0.5f, -0.5f)
             }
         }
     };
+
+    private Vector3Int GetWorldBlockPos(Vector3Int chunkPos, Vector3Int blockChunkPos)
+    {
+        int halfSize = (int)(ChunkWorldSize / 2f);
+        
+        Vector3Int worldPos = chunkPos - new Vector3Int(halfSize, 0, halfSize) + blockChunkPos; 
+
+        return worldPos;
+    }
+
+    private (Vector3Int chunkPos, Vector3Int blockChunkPos) GetBlockChunkPos(Vector3 worldPos)
+    {
+        Vector3Int chunkPos = GetChunkPos(worldPos);
+        
+        Vector3Int inChunkPos = Vector3Int.FloorToInt(worldPos) - chunkPos;
+
+        Vector3Int key = new Vector3Int(inChunkPos.x, inChunkPos.z, 0);
+
+        if (_savedChunks.TryGetValue(chunkPos, out Chunk chunk))
+        {
+            if (chunk.BlockPositions.TryGetValue(key, out Vector3Int blockChunkPos))
+            {
+                return (chunkPos, blockChunkPos);
+            }
+            
+            Debug.LogError("Block not found: " + key);
+            return (Vector3Int.zero, Vector3Int.zero);
+        }
+
+        Debug.LogError("Chunk not found: " + chunkPos);
+        return (Vector3Int.zero, Vector3Int.zero);
+    }
+    
+    public Vector3Int GetClosestTopMostBlock(Vector3 worldPos)
+    {
+        (Vector3Int chunkPos, Vector3Int blockChunkPos) = GetBlockChunkPos(worldPos);
+
+        return GetWorldBlockPos(chunkPos, blockChunkPos);
+    }
 }
 
 
@@ -651,8 +725,8 @@ public class Node
 
 public class Chunk
 {
-    public Vector3 Position;
-    public List<Vector3Int> BlockPositions;
+    public Vector3Int Position;
+    public Dictionary<Vector3Int, Vector3Int> BlockPositions;
     public bool IsGenerated;
     public bool IsLoaded;
     public float LastUsedTime;
@@ -662,7 +736,7 @@ public class Chunk
     
     public Dictionary<Vector3Int, Block> Blocks = new Dictionary<Vector3Int, Block>();
 
-    public Chunk(Vector3 chunkPos, bool isGenerated)
+    public Chunk(Vector3Int chunkPos, bool isGenerated)
     {
         Position = chunkPos;
         IsGenerated = isGenerated;

@@ -4,6 +4,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
+public static class Globals
+{
+    public const float BlockSize = 1;
+}
+
 public class GameplayControllerScr : MonoBehaviour
 {
     public static GameplayControllerScr instance;
@@ -34,12 +39,12 @@ public class GameplayControllerScr : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
     }
 
-    // public void SetPlayerPosition(BlockScr centerBlock)
-    // {
-    //     Vector3 spawnPosition = new Vector3(0, centerBlock.transform.position.y + 2, 0);
-    //
-    //     GameObject player = GameObject.FindGameObjectWithTag("Player");
-    //     player.transform.position = spawnPosition;
-    //     player.GetComponent<PlayerScr>().currentBlockScr = centerBlock;
-    // }
+    public void SetPlayerPosition(Vector3Int position)
+    {
+        Vector3 spawnPosition = new Vector3(0, position.y + 1, 0);
+    
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        player.transform.position = spawnPosition;
+        player.GetComponent<PlayerScr>().currentPosition = position;
+    }
 }
