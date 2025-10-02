@@ -39,8 +39,6 @@ public class GridControllerScr : MonoBehaviour
     
     private HashSet<Chunk> _newChunksToLoadSet = new HashSet<Chunk>();
     private HashSet<Chunk> _chunksToLoadSet = new HashSet<Chunk>();
-
-    private Chunk loadingChunk;
     
     private Vector3Int[] _horizontalDirs =
     {
@@ -83,18 +81,6 @@ public class GridControllerScr : MonoBehaviour
         
         if (!_isLoadingChunks && _chunksToLoad.Count > 0)
             StartCoroutine(ProcessChunksLoading());
-
-        if (Input.GetKeyDown("z"))
-        {
-            Debug.Log(_savedChunks.Count);
-        }
-
-        if (Input.GetKeyDown("x"))
-        {
-            Debug.Log(_isLoadingChunks);
-            Debug.Log(loadingChunk.Position);
-            Debug.Log(_chunksToLoad.Count);
-        }
     }
 
     private void LoadChunks()
@@ -262,19 +248,27 @@ public class GridControllerScr : MonoBehaviour
                 {
                     int neighbourY = neighbour.Position.y;
                     
-                    if (neighbourY >= blockY - 1) continue;
-                    
-                    int blockCount = blockY - neighbourY;
-
-                    if (blockCount > finalBlockCount) finalBlockCount = blockCount;
+                    if (neighbourY < blockY - 1)
+                    {
+                        int blockCount = blockY - neighbourY;
+                        if (blockCount > finalBlockCount)
+                            finalBlockCount = blockCount;
+                    }
+                }
+                else // fill perimeter
+                {
+                    int scaledFill = Mathf.Clamp(blockY / 5, 1, 5);
+                    if (scaledFill > finalBlockCount)
+                        finalBlockCount = scaledFill;
                 }
             }
         
             if (finalBlockCount > 0)
             {
                 Block.BlockTypes blockType = block.BlockType;
+                if (block.BlockType == Block.BlockTypes.Grass) blockType = Block.BlockTypes.Dirt;
                 
-                for (int i = 0; i < finalBlockCount; i++)
+                for (int i = 1; i < finalBlockCount; i++)
                 {
                     Vector3Int newBlockPos = new Vector3Int(gridPos.x, blockY - i, gridPos.z);
                     
@@ -424,7 +418,6 @@ public class GridControllerScr : MonoBehaviour
             else
             {
                 _chunksToLoad.Dequeue();
-                loadingChunk = chunk;
                 LoadChunk(chunk);
                 yield return null; // wait a frame and run again
             }
@@ -624,23 +617,6 @@ public class GridControllerScr : MonoBehaviour
         mesh.SetUVs(0, uvs);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
-        
-        // // --- recentre pivot ---
-        // Vector3 min = mesh.bounds.min;
-        // Vector3 max = mesh.bounds.max;
-        // Vector3 center = (min + max) * 0.5f;
-        // center.y = 0;
-        //
-        // // add offset so the grid lines up with the world grid
-        // center.z += Globals.BlockSize / 2;
-        // center.x += Globals.BlockSize / 2;
-        //
-        // // offset verts
-        // for (int i = 0; i < vertices.Count; i++)
-        //     vertices[i] -= center;
-        //
-        // mesh.SetVertices(vertices);
-        // mesh.RecalculateBounds();
 
         return mesh;
     }
@@ -799,6 +775,7 @@ public class Chunk
     public Dictionary<Vector3Int, Vector3Int> BlockPositions;
     public bool IsGenerated;
     public bool IsLoaded;
+    public bool PostProcessed;
     public float LastUsedTime;
     
     public GameObject ChunkObject;
