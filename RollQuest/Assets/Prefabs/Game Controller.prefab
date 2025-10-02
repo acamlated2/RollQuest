@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 126696177285407314}
   - component: {fileID: -1108119189983833008}
   - component: {fileID: 3757991346047294759}
+  - component: {fileID: 8545465943705463360}
   m_Layer: 0
   m_Name: Game Controller
   m_TagString: GameController
@@ -49,7 +50,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e68874853f1bb844589465468ed5969b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  seed: 0
 --- !u!114 &3439607610455364306
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -62,8 +62,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2be49398ba46cdf49a5075fa9e295fb3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  grassObjectPool: {fileID: 0}
-  dirtObjectPool: {fileID: 0}
 --- !u!114 &5958068561812943934
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -135,3 +133,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   atlas: {fileID: 100100200, guid: e21675d664f18c549bf5b4b56d76c8ca, type: 3}
   blockMaterial: {fileID: 2100000, guid: e286c8944ce85034da3e764a55b98dd1, type: 2}
+--- !u!114 &8545465943705463360
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4303543968376926888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50fe4d94d4e30fa449bd33b58c2f7454, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

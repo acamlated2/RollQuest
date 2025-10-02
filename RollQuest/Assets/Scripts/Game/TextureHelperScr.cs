@@ -71,6 +71,9 @@ public class TextureHelperScr : MonoBehaviour
         AddBlockTextures(Block.BlockTypes.Grass, "Grass");
         AddBlockTextures(Block.BlockTypes.Sand, "Sand");
         AddBlockTextures(Block.BlockTypes.Stone, "Stone");
+        AddBlockTextures(Block.BlockTypes.Wood, "Wood");
+        AddBlockTextures(Block.BlockTypes.Leaf, "Leaf");
+        AddBlockTextures(Block.BlockTypes.Rock, "Rock");
     }
 
     private void AddBlockTextures(Block.BlockTypes blockType, string blockName)

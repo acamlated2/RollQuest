@@ -39,6 +39,8 @@ public class GridControllerScr : MonoBehaviour
     
     private HashSet<Chunk> _newChunksToLoadSet = new HashSet<Chunk>();
     private HashSet<Chunk> _chunksToLoadSet = new HashSet<Chunk>();
+
+    private Chunk loadingChunk;
     
     private Vector3Int[] _horizontalDirs =
     {
@@ -81,6 +83,18 @@ public class GridControllerScr : MonoBehaviour
         
         if (!_isLoadingChunks && _chunksToLoad.Count > 0)
             StartCoroutine(ProcessChunksLoading());
+
+        if (Input.GetKeyDown("z"))
+        {
+            Debug.Log(_savedChunks.Count);
+        }
+
+        if (Input.GetKeyDown("x"))
+        {
+            Debug.Log(_isLoadingChunks);
+            Debug.Log(loadingChunk.Position);
+            Debug.Log(_chunksToLoad.Count);
+        }
     }
 
     private void LoadChunks()
@@ -184,8 +198,7 @@ public class GridControllerScr : MonoBehaviour
         Vector2 origin = new Vector2(
             chunk.Position.x - ChunkWorldSize / 2,
             chunk.Position.z - ChunkWorldSize / 2);
-
-        int offset = GameplayControllerScr.instance.seed % 1000;
+        
         HashSet<Vector3Int> chunkBlockPositions = new HashSet<Vector3Int>(ChunkBlockSize * ChunkBlockSize);
             
         // generate top surface
@@ -197,17 +210,44 @@ public class GridControllerScr : MonoBehaviour
                     z * Globals.BlockSize + Globals.BlockSize / 2);
 
                 // get height and biome data
-                (int height, Block.BlockTypes blockType) = CalculateHeightAndBiome(worldXZ, offset);
+                (int height, Block.BlockTypes blockType) = CalculateHeightAndBiome(worldXZ);
                 
                 Vector3Int gridPos = new Vector3Int(x, height, z);
                 
                 chunkBlockPositions.Add(gridPos);
                 chunk.Blocks[gridPos] = new Block(gridPos, blockType);
+                chunk.GroundBlocks[gridPos] = new Block(gridPos, blockType);
+            }
+        }
+        
+        // generate structures
+        foreach (var kvp in chunk.GroundBlocks.ToList())
+        {
+            Vector3Int pos = kvp.Key;
+            Block block = kvp.Value;
+            
+            int worldX = chunk.Position.x + pos.x;
+            int worldZ = chunk.Position.z + pos.z;
+            
+            float treeNoise = GetNoiseValue(worldX, worldZ, 0.8f) * 0.9f;
+            if (treeNoise > 0.8f && block.BlockType == Block.BlockTypes.Grass)
+            {
+                // place tree
+                StructureScr.instance.PlaceStructure(StructureScr.StructureTypes.Tree, chunk, pos,
+                    ref chunkBlockPositions);
+            }
+            
+            float rockNoise = GetNoiseValue(worldX, worldZ, 0.2f) * 1.1f;
+            if (rockNoise > 0.95f && block.BlockType != Block.BlockTypes.Sand)
+            {
+                // place rock
+                StructureScr.instance.PlaceStructure(StructureScr.StructureTypes.Rock, chunk, pos,
+                    ref chunkBlockPositions);
             }
         }
 
         // generate extra blocks to fill in the gaps
-        foreach (var kvp in chunk.Blocks.ToList())
+        foreach (var kvp in chunk.GroundBlocks.ToList())
         {
             Vector3Int gridPos = kvp.Key;
             Block block = kvp.Value;
@@ -240,6 +280,7 @@ public class GridControllerScr : MonoBehaviour
                     
                     chunkBlockPositions.Add(newBlockPos);
                     chunk.Blocks[newBlockPos] = new Block(newBlockPos, blockType);
+                    chunk.FillerBlocks[newBlockPos] = new Block(newBlockPos, blockType);
                 }
             }
         }
@@ -261,6 +302,7 @@ public class GridControllerScr : MonoBehaviour
                 return ordered.Select((p, i) =>
                     new KeyValuePair<Vector3Int, Vector3Int>(new Vector3Int(p.x - halfSize, p.z - halfSize, i), p));
             }).ToDictionary(kv => kv.Key, kv => kv.Value);
+        
         chunk.IsGenerated = true;
     }
 
@@ -269,7 +311,7 @@ public class GridControllerScr : MonoBehaviour
         int nx = blockPos.x + dir.x;
         int nz = blockPos.z + dir.z;
 
-        foreach (var kvp in chunk.Blocks)
+        foreach (var kvp in chunk.GroundBlocks)
         {
             if (kvp.Key.x == nx && kvp.Key.z == nz)
             {
@@ -280,13 +322,13 @@ public class GridControllerScr : MonoBehaviour
         return null;
     }
     
-    private (int height, Block.BlockTypes blockType) CalculateHeightAndBiome(Vector2 blockPos, int offset)
+    private (int height, Block.BlockTypes blockType) CalculateHeightAndBiome(Vector2 blockPos)
     {
-        float xCoord = (blockPos.x + offset) * NoiseScale;
-        float zCoord = (blockPos.y + offset) * NoiseScale;
+        float xCoord = blockPos.x * NoiseScale;
+        float zCoord = blockPos.y * NoiseScale;
         
         // biome
-        float biomeNoise = Mathf.PerlinNoise(xCoord * 0.5f, zCoord * 0.5f);
+        float biomeNoise = GetNoiseValue(xCoord, zCoord, 0.5f);
         biomeNoise = Mathf.Pow(biomeNoise, 0.5f);
         
         float desertWeight   = Mathf.Clamp01(1 - Mathf.Abs(biomeNoise - 0.4f) / 0.4f);
@@ -299,14 +341,14 @@ public class GridControllerScr : MonoBehaviour
         mountainWeight /= total;
 
         // base terrain
-        float baseNoise = Mathf.PerlinNoise(xCoord, zCoord) * 0.6f +
-                          Mathf.PerlinNoise(xCoord * 2, zCoord * 2) * 0.3f +
-                          Mathf.PerlinNoise(xCoord * 4, zCoord * 4) * 0.1f;
+        float baseNoise = GetNoiseValue(xCoord, zCoord, 1) * 0.6f +
+                          GetNoiseValue(xCoord, zCoord, 2) * 0.3f +
+                          GetNoiseValue(xCoord, zCoord, 4) * 0.1f;
 
         float heightCurve = Mathf.Pow(baseNoise, Sharpness);
 
         // large scale terrain variation
-        float continentNoise = Mathf.PerlinNoise(xCoord * 0.002f, zCoord * 0.002f);
+        float continentNoise = GetNoiseValue(xCoord, zCoord, 0.002f);
         float terrainScale = Mathf.Lerp(0.1f, 1.3f, continentNoise);
 
         // biome rules
@@ -325,6 +367,11 @@ public class GridControllerScr : MonoBehaviour
         else if (maxWeight == mountainWeight) blockType = Block.BlockTypes.Stone;
 
         return (height, blockType);
+    }
+
+    private float GetNoiseValue(float worldX, float worldZ, float scale = 0.1f)
+    {
+        return Mathf.PerlinNoise((worldX + Globals.seedOffsetX) * scale, (worldZ + Globals.seedOffsetZ) * scale);
     }
 
     private void LoadChunk(Chunk chunk)
@@ -370,12 +417,14 @@ public class GridControllerScr : MonoBehaviour
 
             if (!chunk.IsGenerated)
             {
+                //Debug.Log("not generated yet");
                 yield return null; // wait a frame and check again, but don't dequeue
             }
 
             else
             {
                 _chunksToLoad.Dequeue();
+                loadingChunk = chunk;
                 LoadChunk(chunk);
                 yield return null; // wait a frame and run again
             }
@@ -488,15 +537,35 @@ public class GridControllerScr : MonoBehaviour
         int vertIndex = 0;
         float s = Globals.BlockSize;
 
-        HashSet<Vector3Int> blockSet = chunk.BlockPositions.Values.ToHashSet();
+        HashSet<Vector3Int> blockSet = chunk.GroundBlocks.Keys.ToHashSet();
+        
+        Vector3Int minBlock = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
+        Vector3Int maxBlock = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
 
-        foreach (Vector3Int block in blockSet)
+        foreach (var b in blockSet)
         {
-            Vector3 pos = new Vector3(block.x, block.y, block.z) * s;
+            if (b.x < minBlock.x) minBlock.x = b.x;
+            if (b.z < minBlock.z) minBlock.z = b.z;
+
+            if (b.x > maxBlock.x) maxBlock.x = b.x;
+            if (b.z > maxBlock.z) maxBlock.z = b.z;
+        }
+
+        Vector3 chunkCenter = (Vector3)(minBlock + maxBlock) * 0.5f;
+        chunkCenter.y = 0;
+        chunkCenter.x += s / 2;
+        chunkCenter.z += s / 2;
+
+        blockSet.UnionWith(chunk.FillerBlocks.Keys);
+        blockSet.UnionWith(chunk.StructureBlocks.Keys);
+
+        foreach (Vector3Int blockPos in blockSet)
+        {
+            Vector3 pos = (Vector3)blockPos * s - chunkCenter;
 
             foreach (var dir in Directions)
             {
-                Vector3Int neighbour = block + dir.Offset;
+                Vector3Int neighbour = blockPos + dir.Offset;
                 if (blockSet.Contains(neighbour))
                     continue; // hidden face
 
@@ -524,15 +593,16 @@ public class GridControllerScr : MonoBehaviour
                                     faceDir == Vector3Int.right ? 1 : 
                                     faceDir == Vector3Int.back ? 2 : 3;
                     
-                    int rand = Mathf.Abs(Hash(block.x, block.y, block.z, faceIndex)) % 4;
+                    int rand = Mathf.Abs(Hash(blockPos.x, blockPos.y, blockPos.z, faceIndex)) % 4;
 
                     if (rand == 0) faceDir = Vector3Int.left;
                     else if (rand == 1) faceDir = Vector3Int.right;
                     else if (rand == 2) faceDir = Vector3Int.back;
                     else faceDir = Vector3Int.forward;
                 }
-                
-                string spriteName = TextureHelperScr.instance.BlockTextures[(chunk.Blocks[block].BlockType, faceDir)];
+
+                string spriteName =
+                    TextureHelperScr.instance.BlockTextures[(chunk.GetBlockInAny(blockPos).BlockType, faceDir)];
 
                 Rect uvRect = TextureHelperScr.instance.GetUVRect(spriteName);
                 
@@ -555,22 +625,22 @@ public class GridControllerScr : MonoBehaviour
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         
-        // --- recentre pivot ---
-        Vector3 min = mesh.bounds.min;
-        Vector3 max = mesh.bounds.max;
-        Vector3 center = (min + max) * 0.5f;
-        center.y = 0;
-        
-        // add offset so the grid lines up with the world grid
-        center.z += Globals.BlockSize / 2;
-        center.x += Globals.BlockSize / 2;
-
-        // offset verts
-        for (int i = 0; i < vertices.Count; i++)
-            vertices[i] -= center;
-
-        mesh.SetVertices(vertices);
-        mesh.RecalculateBounds();
+        // // --- recentre pivot ---
+        // Vector3 min = mesh.bounds.min;
+        // Vector3 max = mesh.bounds.max;
+        // Vector3 center = (min + max) * 0.5f;
+        // center.y = 0;
+        //
+        // // add offset so the grid lines up with the world grid
+        // center.z += Globals.BlockSize / 2;
+        // center.x += Globals.BlockSize / 2;
+        //
+        // // offset verts
+        // for (int i = 0; i < vertices.Count; i++)
+        //     vertices[i] -= center;
+        //
+        // mesh.SetVertices(vertices);
+        // mesh.RecalculateBounds();
 
         return mesh;
     }
@@ -734,12 +804,36 @@ public class Chunk
     public GameObject ChunkObject;
     public Mesh Mesh;
     
-    public Dictionary<Vector3Int, Block> Blocks = new Dictionary<Vector3Int, Block>();
+    public Dictionary<Vector3Int, Block> Blocks;
+    public Dictionary<Vector3Int, Block> GroundBlocks;
+    public Dictionary<Vector3Int, Block> FillerBlocks;
+    public Dictionary<Vector3Int, Block> StructureBlocks;
 
     public Chunk(Vector3Int chunkPos, bool isGenerated)
     {
         Position = chunkPos;
         IsGenerated = isGenerated;
         LastUsedTime = Time.time;
+        
+        Blocks = new Dictionary<Vector3Int, Block>();
+        GroundBlocks = new Dictionary<Vector3Int, Block>();
+        FillerBlocks = new Dictionary<Vector3Int, Block>();
+        StructureBlocks = new Dictionary<Vector3Int, Block>();
+    }
+    
+    public bool ContainsBlock(Vector3Int blockPos)
+    {
+        bool result = Blocks.ContainsKey(blockPos);
+        return result;
+    }
+
+    public Block GetBlockInAny(Vector3Int blockPos)
+    {
+        if (Blocks.ContainsKey(blockPos))
+        {
+            return Blocks[blockPos];
+        }
+
+        return null;
     }
 }

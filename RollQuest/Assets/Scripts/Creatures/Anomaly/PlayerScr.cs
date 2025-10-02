@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerScr : MonoBehaviour
+public class PlayerScr : AnomalyScr
 {
     public static PlayerScr instance;
     

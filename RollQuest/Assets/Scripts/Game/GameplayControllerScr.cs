@@ -7,6 +7,9 @@ using Random = UnityEngine.Random;
 public static class Globals
 {
     public const float BlockSize = 1;
+    public static int seed = 0;
+    public static float seedOffsetX = 0;
+    public static float seedOffsetZ = 0;
 }
 
 public class GameplayControllerScr : MonoBehaviour
@@ -14,8 +17,6 @@ public class GameplayControllerScr : MonoBehaviour
     public static GameplayControllerScr instance;
     
     private bool _gameStarted;
-    
-    public int seed;
     
     private void Awake()
     {
@@ -27,11 +28,18 @@ public class GameplayControllerScr : MonoBehaviour
 
         instance = this;
 
-        if (seed == 0)
+        if (Globals.seed == 0)
         {
-            seed = Random.Range(int.MinValue, int.MaxValue);
+            Globals.seed = Random.Range(int.MinValue, int.MaxValue);
+            
+            int seedX = Globals.seed & 0xFFFF;
+            int seedZ = (Globals.seed >> 16) & 0xFFFF;
+
+            Globals.seedOffsetX = seedX * 0.01f;
+            Globals.seedOffsetZ = seedZ * 0.01f;
+            
+            Random.InitState(Globals.seed);
         }
-        Random.InitState(seed);
     }
 
     private void Start()
